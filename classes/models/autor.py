@@ -11,7 +11,6 @@ class PainelEstatisticas:
         self.tempo_medio_leitura_min = 0
     
     def atualizar(self, historia: 'Historia') -> None:
-        "Atualiza estatísticas baseado na história"
         self.total_leitores = len(historia.leitores)
         self.total_comentarios = sum(len(c.comentarios) for c in historia.capitulos)
         
@@ -35,13 +34,11 @@ class Autor(Usuario):
         self.estatisticas = PainelEstatisticas()
     
     def publicar_historia(self, historia: 'Historia') -> None:
-        """Publica uma nova história"""
         self.historias_publicadas.append(historia)
         historia.autor = self
         print(f"História '{historia.titulo}' publicada por {self.nome}")
     
     def publicar_capitulo(self, historia: 'Historia', capitulo: 'Capitulo') -> None:
-        "Adiciona um capítulo à história e notifica seguidores"
         if historia in self.historias_publicadas:
             historia.adicionar_capitulo(capitulo)
             #Pra notificar seguidores
