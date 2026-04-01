@@ -1,11 +1,11 @@
 # Projeto-de-Software-
 implementação do projeto de software ( site : StoryFlow)
 
-📖 StoryFlow
+StoryFlow
 
 Plataforma de leitura e publicação de histórias, desenvolvida como alternativa ao Wattpad com foco em qualidade, organização e experiência do usuário.
 
-## 🚀 Funcionalidades
+##  Funcionalidades
 
 - **Filtro Inteligente de Histórias** - Encontre histórias por qualidade, status e popularidade
 - **Avaliação por Capítulo** - Avalie cada capítulo individualmente
@@ -15,7 +15,7 @@ Plataforma de leitura e publicação de histórias, desenvolvida como alternativ
 - **Biblioteca Pessoal** - Organize histórias em categorias
 - **Painel para Autores** - Estatísticas detalhadas de desempenho
 
-## 🛠️ Tecnologias
+##  Tecnologias
 
 - Python 3.8+
 - Sem dependências externas (apenas bibliotecas padrão)
