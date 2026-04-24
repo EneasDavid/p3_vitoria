@@ -27,6 +27,7 @@ class Leitor(Usuario):
         self._avaliacoes: List['Avaliacao'] = []
         self._comentarios: List['Comentario'] = []
         self.progresso_leitura: dict = {}  # {historia_id: {percentual, capitulo_id, capitulo_titulo, atualizado_em}}
+        self.sessoes_leitura: dict = {}
 
     def exibir_painel(self) -> str:
         """
@@ -93,6 +94,44 @@ class Leitor(Usuario):
             {'historia_id': historia_id, **dados}
             for historia_id, dados in self.progresso_leitura.items()
         ]
+
+    def registrar_tempo_leitura(
+        self,
+        historia_id: str,
+        capitulo_id: str,
+        pagina_global: int,
+        segundos: int,
+    ) -> dict:
+        """Acumula tempo de leitura por página, capítulo e história."""
+        try:
+            segundos = int(segundos)
+            pagina_global = int(pagina_global)
+        except (TypeError, ValueError):
+            segundos = 0
+            pagina_global = 0
+
+        if not historia_id or not capitulo_id or segundos <= 0:
+            return self.obter_tempo_leitura(historia_id)
+
+        historia = self.sessoes_leitura.setdefault(historia_id, {
+            'total_segundos': 0,
+            'capitulos': {},
+        })
+        capitulo = historia['capitulos'].setdefault(capitulo_id, {
+            'total_segundos': 0,
+            'paginas': {},
+        })
+        pagina_chave = str(max(1, pagina_global))
+        capitulo['paginas'][pagina_chave] = capitulo['paginas'].get(pagina_chave, 0) + segundos
+        capitulo['total_segundos'] += segundos
+        historia['total_segundos'] += segundos
+        return self.obter_tempo_leitura(historia_id)
+
+    def obter_tempo_leitura(self, historia_id: str | None = None) -> dict:
+        """Retorna o tempo acumulado de leitura."""
+        if historia_id:
+            return self.sessoes_leitura.get(historia_id, {'total_segundos': 0, 'capitulos': {}})
+        return self.sessoes_leitura
 
     def obter_avaliacoes(self) -> List['Avaliacao']:
         """Retorna todas as avaliações do leitor."""

@@ -19,6 +19,13 @@ const state = {
         pages: [],
         currentPage: 0,
         wordsPerPage: 200,
+        currentGlobalPage: 1,
+    },
+    readerSession: {
+        startedAt: null,
+        pageStartedAt: null,
+        intervalId: null,
+        unsentSeconds: 0,
     },
     readerPrefs: {
         fontFamily: 'serif_classic',
@@ -99,11 +106,15 @@ function cacheElements() {
     el.readerChapterTitle = document.getElementById('reader-chapter-title');
     el.readerMeta = document.getElementById('reader-meta');
     el.readerContent = document.getElementById('reader-content');
-    el.readerPrev = document.getElementById('reader-prev');
-    el.readerNext = document.getElementById('reader-next');
+    el.readerChapterSelect = document.getElementById('reader-chapter-select');
     el.readerPagePrev = document.getElementById('reader-page-prev');
     el.readerPageNext = document.getElementById('reader-page-next');
     el.readerPageCounter = document.getElementById('reader-page-counter');
+    el.readerSessionTime = document.getElementById('reader-session-time');
+    el.readerPageTime = document.getElementById('reader-page-time');
+    el.readerChapterTime = document.getElementById('reader-chapter-time');
+    el.readerBookTime = document.getElementById('reader-book-time');
+    el.readerHighlight = document.getElementById('reader-highlight');
     el.readerMark = document.getElementById('reader-mark');
     el.readerFinish = document.getElementById('reader-finish');
     el.readerFontOptions = document.getElementById('reader-font-options');
@@ -114,6 +125,8 @@ function cacheElements() {
     el.readerComments = document.getElementById('reader-comments');
     el.readerCommentForm = document.getElementById('reader-comment-form');
     el.readerCommentInput = document.getElementById('reader-comment-input');
+    el.readerMarksCount = document.getElementById('reader-marks-count');
+    el.readerMarksList = document.getElementById('reader-marks-list');
 }
 
 function bindGlobalEvents() {
@@ -186,25 +199,22 @@ function bindGlobalEvents() {
 
     el.readerBackdrop?.addEventListener('click', fecharLeitor);
     el.readerClose?.addEventListener('click', fecharLeitor);
-    el.readerPrev?.addEventListener('click', async () => {
-        const prev = state.capituloAtivo?.navegacao?.anterior_id;
-        if (prev) {
-            await abrirCapitulo(state.capituloAtivo.historia.id, prev);
-        }
-    });
-    el.readerNext?.addEventListener('click', async () => {
-        const next = state.capituloAtivo?.navegacao?.proximo_id;
-        if (next) {
-            await abrirCapitulo(state.capituloAtivo.historia.id, next);
-        }
-    });
     el.readerMark?.addEventListener('click', salvarProgressoLeitura);
     el.readerFinish?.addEventListener('click', () => salvarProgressoLeitura(100));
     el.readerPagePrev?.addEventListener('click', navegarPaginaAnterior);
     el.readerPageNext?.addEventListener('click', navegarProximaPagina);
+    el.readerChapterSelect?.addEventListener('change', async (event) => {
+        const chapterId = event.target.value;
+        const storyId = state.capituloAtivo?.historia?.id;
+        if (storyId && chapterId && chapterId !== state.capituloAtivo?.capitulo?.id) {
+            await abrirCapitulo(storyId, chapterId);
+        }
+    });
     el.readerFontSize?.addEventListener('input', onReaderPreferenceChanged);
     el.readerFontOptions?.addEventListener('click', handleReaderPreferenceOptionClick);
     el.readerBgOptions?.addEventListener('click', handleReaderPreferenceOptionClick);
+    el.readerHighlight?.addEventListener('click', destacarSelecaoAtual);
+    el.readerMarksList?.addEventListener('click', handleReaderMarksClick);
     el.readerCommentForm?.addEventListener('submit', comentarCapituloAtual);
     el.readerComments?.addEventListener('click', handleCommentActionClick);
 }
@@ -579,17 +589,20 @@ function renderEscrever() {
     }
     el.autoriaHistorias.innerHTML = state.minhasHistorias.length
         ? state.minhasHistorias.map((story) => `
-            <article class="story-row">
+            <article class="story-row writer-library-item">
                 <div>
                     <strong>${escapeHtml(story.titulo)}</strong>
                     <p class="muted">${escapeHtml(story.sinopse)}</p>
                     <p class="meta-line">${story.total_capitulos} capítulos · ${escapeHtml(story.genero || 'Geral')}</p>
                     <p class="muted">${(story.capitulos || []).map((chapter) => `${chapter.ordem}. ${chapter.titulo}`).join(' · ')}</p>
                 </div>
-                <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Ver no catálogo</button>
+                <div class="inline-actions writer-library-actions">
+                    <button class="btn-primary" data-action="selecionar-escrita" data-story-id="${story.id}" type="button">Adicionar capítulo</button>
+                    <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Ver</button>
+                </div>
             </article>
         `).join('')
-        : `<p class="placeholder">Você ainda não publicou nenhuma história.</p>`;
+        : `<p class="placeholder">Sua biblioteca de criação está vazia. Crie a capa da primeira história ao lado.</p>`;
 
     if (el.capituloHistoriaId) {
         el.capituloHistoriaId.innerHTML = state.minhasHistorias.length
@@ -607,6 +620,7 @@ function renderVoce() {
     const autoria = state.painel.autoria || {};
 
     if (el.voceStats) {
+        const marcacoes = leitura.marcacoes || [];
         el.voceStats.innerHTML = `
             <h3>Seu resumo</h3>
             <p class="muted">${escapeHtml(leitura.leitor?.painel || '')}</p>
@@ -614,6 +628,15 @@ function renderVoce() {
                 <div class="summary-item"><span>Leituras ativas</span><strong>${(leitura.progresso || []).length}</strong></div>
                 <div class="summary-item"><span>Na biblioteca</span><strong>${leitura.biblioteca?.total || 0}</strong></div>
                 <div class="summary-item"><span>Publicadas</span><strong>${autoria.total || 0}</strong></div>
+            </div>
+            <div class="profile-quotes">
+                <h4>Citações marcadas</h4>
+                ${marcacoes.length ? marcacoes.slice(0, 5).map((item) => `
+                    <article class="profile-quote">
+                        <p>“${escapeHtml(item.trecho)}”</p>
+                        <span>${escapeHtml(item.historia_titulo)} · ${escapeHtml(item.capitulo_titulo)}</span>
+                    </article>
+                `).join('') : `<p class="placeholder">As partes que você marcar aparecerão aqui.</p>`}
             </div>
         `;
     }
@@ -727,6 +750,15 @@ async function handleStoryActionClick(event) {
             return;
         }
 
+        if (action === 'selecionar-escrita') {
+            if (el.capituloHistoriaId) {
+                el.capituloHistoriaId.value = storyId;
+                el.capituloHistoriaId.scrollIntoView({behavior: 'smooth', block: 'center'});
+            }
+            showToast('História selecionada. Agora adicione um capítulo.');
+            return;
+        }
+
         if (action === 'salvar-historia') {
             await salvarHistoria(storyId, button.dataset.categoria || 'lendo');
             return;
@@ -784,6 +816,11 @@ async function publicarHistoria(event) {
         }
         await carregarAutoria();
         renderEscrever();
+        if (response.historia?.id && el.capituloHistoriaId) {
+            el.capituloHistoriaId.value = response.historia.id;
+        } else if (response.id && el.capituloHistoriaId) {
+            el.capituloHistoriaId.value = response.id;
+        }
     } catch (error) {
         handleError(error);
     }
@@ -850,10 +887,12 @@ async function avaliarHistoria(storyId, nota) {
 }
 
 async function abrirCapitulo(storyId, chapterId, options = {}) {
+    await registrarTempoLeituraAtual();
     const response = await api(`/me/historias/${encodeURIComponent(storyId)}/capitulos/${encodeURIComponent(chapterId)}`);
     const paginaInicial = options.paginaInicial || 'primeira';
     state.capituloAtivo = response;
     renderModalLeitura(paginaInicial);
+    iniciarSessaoLeitura();
     el.readerModal?.classList.remove('hidden');
     el.readerModal?.setAttribute('aria-hidden', 'false');
 }
@@ -862,10 +901,11 @@ function renderModalLeitura(paginaInicial = 'manter') {
     if (!state.capituloAtivo) {
         return;
     }
-    const {historia, capitulo, navegacao} = state.capituloAtivo;
+    const {historia, capitulo} = state.capituloAtivo;
     el.readerStoryName.textContent = `${historia.titulo} · ${historia.autor || 'Autor'}`;
     el.readerChapterTitle.textContent = capitulo.titulo;
-    el.readerMeta.textContent = `Capítulo ${capitulo.ordem} · ${capitulo.tempo_estimado_minutos} min · ${capitulo.visualizacoes} leituras`;
+    el.readerMeta.textContent = `Capítulo ${capitulo.ordem}`;
+    renderReaderChapterSelect();
     sincronizarControlesLeitor();
     aplicarPaginacaoCapitulo(paginaInicial);
     el.readerCommentsCount.textContent = String((capitulo.comentarios_recentes || []).length);
@@ -884,8 +924,25 @@ function renderModalLeitura(paginaInicial = 'manter') {
         `).join('')
         : `<p class="placeholder">Seja o primeiro comentário neste capítulo.</p>`;
 
-    el.readerPrev.disabled = !navegacao.anterior_id;
-    el.readerNext.disabled = !navegacao.proximo_id;
+    renderMarcacoesLeitor();
+    atualizarTempoLeituraUI();
+}
+
+function renderReaderChapterSelect() {
+    if (!el.readerChapterSelect || !state.capituloAtivo) {
+        return;
+    }
+
+    const capitulos = state.capituloAtivo.historia?.capitulos || [];
+    const capituloAtualId = state.capituloAtivo.capitulo?.id;
+    el.readerChapterSelect.innerHTML = capitulos.length
+        ? capitulos.map((chapter) => `
+            <option value="${escapeAttribute(chapter.id)}" ${chapter.id === capituloAtualId ? 'selected' : ''}>
+                ${chapter.ordem}. ${escapeHtml(chapter.titulo)}
+            </option>
+        `).join('')
+        : `<option value="">Sem capítulos</option>`;
+    el.readerChapterSelect.disabled = !capitulos.length;
 }
 
 function aplicarPaginacaoCapitulo(paginaInicial = 'manter') {
@@ -993,6 +1050,79 @@ function calcularContadorGlobalLivro() {
     };
 }
 
+function obterDestaquesDaPagina(textoPagina) {
+    const destaques = state.capituloAtivo?.capitulo?.destaques || {};
+    const normalizarTexto = (valor) => String(valor || '').toLocaleLowerCase('pt-BR');
+    const textoNormalizado = normalizarTexto(textoPagina);
+    const meus = new Set((destaques.meus || []).map(normalizarTexto));
+    const lista = [
+        ...(destaques.recomendados || []).map((item) => ({...item, tipo: 'popular'})),
+        ...(destaques.meus || []).map((trecho) => ({trecho, tipo: 'meu'})),
+    ];
+
+    return lista
+        .filter((item) => item.trecho && textoNormalizado.includes(normalizarTexto(item.trecho)))
+        .map((item) => ({
+            ...item,
+            tipo: meus.has(normalizarTexto(item.trecho)) ? 'meu' : item.tipo,
+        }))
+        .sort((a, b) => String(b.trecho).length - String(a.trecho).length);
+}
+
+function renderTextoComDestaques(texto, destaques) {
+    let resultado = escapeHtml(texto);
+    for (const destaque of destaques) {
+        const trecho = String(destaque.trecho || '');
+        if (!trecho) {
+            continue;
+        }
+        const classe = destaque.tipo === 'meu' ? 'reader-highlight-user' : 'reader-highlight-popular';
+        const escapedTrecho = escapeHtml(trecho);
+        resultado = resultado.split(escapedTrecho).join(`<mark class="${classe}">${escapedTrecho}</mark>`);
+    }
+    return resultado;
+}
+
+function renderMarcacoesLeitor() {
+    if (!el.readerMarksList || !state.capituloAtivo) {
+        return;
+    }
+
+    const destaques = state.capituloAtivo.capitulo?.destaques || {};
+    const meus = destaques.meus || [];
+    const recomendados = destaques.recomendados || [];
+    const itens = [
+        ...meus.map((trecho) => ({trecho, tipo: 'meu'})),
+        ...recomendados
+            .filter((item) => !meus.some((trecho) => String(trecho).toLocaleLowerCase('pt-BR') === String(item.trecho).toLocaleLowerCase('pt-BR')))
+            .map((item) => ({...item, tipo: 'popular'})),
+    ];
+
+    if (el.readerMarksCount) {
+        el.readerMarksCount.textContent = String(meus.length);
+    }
+
+    el.readerMarksList.innerHTML = itens.length
+        ? itens.map((item) => `
+            <article class="reader-mark-item">
+                <div class="reader-mark-avatar">${escapeHtml((state.user?.nome || 'U').slice(0, 1).toUpperCase())}</div>
+                <div>
+                    <div class="reader-mark-head">
+                        <strong>${item.tipo === 'meu' ? 'Você marcou' : 'Muito marcada'}</strong>
+                        ${item.tipo === 'popular' ? `<span>${item.percentual || 60}% dos leitores</span>` : ''}
+                    </div>
+                    <p>${escapeHtml(item.trecho)}</p>
+                    ${item.tipo === 'meu' ? `
+                        <button class="mark-remove-btn" data-action="remove-highlight" data-highlight-text="${escapeAttribute(item.trecho)}" type="button">
+                            Remover marcação
+                        </button>
+                    ` : ''}
+                </div>
+            </article>
+        `).join('')
+        : `<p class="placeholder">Os trechos destacados vão aparecer aqui.</p>`;
+}
+
 function renderPaginaAtualLeitura() {
     const paginas = state.readerPagination.pages || [];
     const indice = state.readerPagination.currentPage || 0;
@@ -1003,15 +1133,17 @@ function renderPaginaAtualLeitura() {
     const hasNextChapter = Boolean(state.capituloAtivo?.navegacao?.proximo_id);
     const hasGlobalPrev = indice > 0 || hasPrevChapter;
     const hasGlobalNext = indice < total - 1 || hasNextChapter;
+    state.readerPagination.currentGlobalPage = contadorLivro.paginaAtual;
 
     const blocos = dividirPaginaEmParagrafos(paginaAtual, 42);
+    const destaquesDaPagina = obterDestaquesDaPagina(paginaAtual);
     aplicarPreferenciasVisuaisLeitor();
 
     el.readerContent.innerHTML = `
         <div class="reader-pages">
             <article class="reader-page">
                 ${blocos.length
-                    ? blocos.map((paragrafo) => `<p>${escapeHtml(paragrafo)}</p>`).join('')
+                    ? blocos.map((paragrafo) => `<p>${renderTextoComDestaques(paragrafo, destaquesDaPagina)}</p>`).join('')
                     : '<p>Este capítulo ainda não possui conteúdo.</p>'}
                 <footer class="reader-page-index">Página ${contadorLivro.paginaAtual}</footer>
             </article>
@@ -1027,6 +1159,9 @@ function renderPaginaAtualLeitura() {
     if (el.readerPageNext) {
         el.readerPageNext.disabled = !hasGlobalNext;
     }
+    renderMarcacoesLeitor();
+    reiniciarTempoDaPagina();
+    atualizarTempoLeituraUI();
 }
 
 function dividirPaginaEmParagrafos(texto, palavrasPorBloco = 42) {
@@ -1042,6 +1177,7 @@ function dividirPaginaEmParagrafos(texto, palavrasPorBloco = 42) {
 }
 
 async function navegarPaginaAnterior() {
+    await registrarTempoLeituraAtual();
     if (state.readerPagination.currentPage > 0) {
         state.readerPagination.currentPage -= 1;
         renderPaginaAtualLeitura();
@@ -1058,6 +1194,7 @@ async function navegarPaginaAnterior() {
 }
 
 async function navegarProximaPagina() {
+    await registrarTempoLeituraAtual();
     const total = state.readerPagination.pages.length;
     if (state.readerPagination.currentPage < total - 1) {
         state.readerPagination.currentPage += 1;
@@ -1166,7 +1303,164 @@ function aplicarPreferenciasVisuaisLeitor() {
     el.readerContent.style.setProperty('--reader-font-size', `${state.readerPrefs.fontSize}px`);
 }
 
-function fecharLeitor() {
+function iniciarSessaoLeitura() {
+    const agora = Date.now();
+    if (!state.readerSession.startedAt) {
+        state.readerSession.startedAt = agora;
+    }
+    state.readerSession.pageStartedAt = agora;
+    if (!state.readerSession.intervalId) {
+        state.readerSession.intervalId = window.setInterval(atualizarTempoLeituraUI, 1000);
+    }
+    atualizarTempoLeituraUI();
+}
+
+function reiniciarTempoDaPagina() {
+    state.readerSession.pageStartedAt = Date.now();
+}
+
+function segundosDesde(timestamp) {
+    if (!timestamp) {
+        return 0;
+    }
+    return Math.max(0, Math.floor((Date.now() - timestamp) / 1000));
+}
+
+function formatarTempo(segundos) {
+    const total = Math.max(0, Number(segundos) || 0);
+    const minutos = Math.floor(total / 60);
+    const resto = total % 60;
+    return `${minutos}:${String(resto).padStart(2, '0')}`;
+}
+
+function obterTempoCapituloAtual() {
+    const tempo = state.capituloAtivo?.tempo_leitura || state.capituloAtivo?.historia?.tempo_leitura;
+    const capituloId = state.capituloAtivo?.capitulo?.id;
+    const capitulo = tempo?.capitulos?.[capituloId];
+    return Number(capitulo?.total_segundos || 0);
+}
+
+function obterTempoLivroAtual() {
+    const tempo = state.capituloAtivo?.tempo_leitura || state.capituloAtivo?.historia?.tempo_leitura;
+    return Number(tempo?.total_segundos || 0);
+}
+
+function atualizarTempoLeituraUI() {
+    const paginaSegundos = segundosDesde(state.readerSession.pageStartedAt);
+    const sessaoSegundos = segundosDesde(state.readerSession.startedAt);
+    if (el.readerSessionTime) {
+        el.readerSessionTime.textContent = formatarTempo(sessaoSegundos);
+    }
+    if (el.readerPageTime) {
+        el.readerPageTime.textContent = formatarTempo(paginaSegundos);
+    }
+    if (el.readerChapterTime) {
+        el.readerChapterTime.textContent = formatarTempo(obterTempoCapituloAtual() + paginaSegundos);
+    }
+    if (el.readerBookTime) {
+        el.readerBookTime.textContent = formatarTempo(obterTempoLivroAtual() + paginaSegundos);
+    }
+}
+
+async function registrarTempoLeituraAtual() {
+    if (!state.capituloAtivo || !state.readerSession.pageStartedAt) {
+        return;
+    }
+    const segundos = segundosDesde(state.readerSession.pageStartedAt);
+    if (segundos < 2) {
+        reiniciarTempoDaPagina();
+        return;
+    }
+    reiniciarTempoDaPagina();
+
+    try {
+        const response = await api('/me/tempo-leitura', {
+            method: 'POST',
+            body: {
+                historia_id: state.capituloAtivo.historia.id,
+                capitulo_id: state.capituloAtivo.capitulo.id,
+                pagina_global: state.readerPagination.currentGlobalPage || 1,
+                segundos,
+            },
+        });
+        if (response.tempo_leitura) {
+            state.capituloAtivo.tempo_leitura = response.tempo_leitura;
+        }
+        atualizarTempoLeituraUI();
+    } catch (error) {
+        state.readerSession.unsentSeconds += segundos;
+    }
+}
+
+async function destacarSelecaoAtual() {
+    if (!state.capituloAtivo) {
+        return;
+    }
+    const selection = window.getSelection();
+    const trecho = selection ? String(selection.toString()).trim() : '';
+    if (!trecho) {
+        showToast('Selecione um trecho da página para destacar.', true);
+        return;
+    }
+
+    try {
+        const response = await api('/me/destaques', {
+            method: 'POST',
+            body: {
+                historia_id: state.capituloAtivo.historia.id,
+                capitulo_id: state.capituloAtivo.capitulo.id,
+                trecho,
+            },
+        });
+        if (response.destaques) {
+            state.capituloAtivo.capitulo.destaques = response.destaques;
+        }
+        selection?.removeAllRanges();
+        renderMarcacoesLeitor();
+        renderPaginaAtualLeitura();
+        showToast(response.mensagem || 'Trecho destacado.');
+    } catch (error) {
+        handleError(error);
+    }
+}
+
+async function handleReaderMarksClick(event) {
+    const button = event.target.closest('[data-action="remove-highlight"]');
+    if (!button || !state.capituloAtivo) {
+        return;
+    }
+
+    try {
+        const response = await api('/me/destaques', {
+            method: 'DELETE',
+            body: {
+                historia_id: state.capituloAtivo.historia.id,
+                capitulo_id: state.capituloAtivo.capitulo.id,
+                trecho: button.dataset.highlightText || '',
+            },
+        });
+        if (response.destaques) {
+            state.capituloAtivo.capitulo.destaques = response.destaques;
+        }
+        renderMarcacoesLeitor();
+        renderPaginaAtualLeitura();
+        showToast(response.mensagem || 'Marcação removida.');
+    } catch (error) {
+        handleError(error);
+    }
+}
+
+async function fecharLeitor() {
+    await registrarTempoLeituraAtual();
+    if (state.readerSession.intervalId) {
+        window.clearInterval(state.readerSession.intervalId);
+    }
+    state.readerSession = {
+        startedAt: null,
+        pageStartedAt: null,
+        intervalId: null,
+        unsentSeconds: 0,
+    };
     el.readerModal?.classList.add('hidden');
     el.readerModal?.setAttribute('aria-hidden', 'true');
 }

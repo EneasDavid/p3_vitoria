@@ -178,9 +178,22 @@
 
                 {% if pagina == 'escrever' %}
                 <section class="screen screen-write">
+                    <article class="card write-card write-library-card">
+                        <div class="section-head">
+                            <div>
+                                <h2>Biblioteca de criação</h2>
+                                <p class="muted">Escolha uma história criada ou comece uma nova capa.</p>
+                            </div>
+                        </div>
+                        <div id="autoria-historias" class="stack-list"></div>
+                    </article>
+
                     <article class="card write-card">
                         <div class="section-head">
-                            <h2>Nova história</h2>
+                            <div>
+                                <h2>Capa e dados</h2>
+                                <p class="muted">Primeiro defina título, capa e resumo da obra.</p>
+                            </div>
                         </div>
                         <form id="nova-historia-form" class="form-stack">
                             <label>
@@ -199,13 +212,16 @@
                                 Sinopse
                                 <textarea name="sinopse" required placeholder="Escreva uma sinopse envolvente"></textarea>
                             </label>
-                            <button type="submit" class="btn-primary">Publicar história</button>
+                            <button type="submit" class="btn-primary">Criar capa da história</button>
                         </form>
                     </article>
 
                     <aside class="card write-card">
                         <div class="section-head">
-                            <h3>Novo capítulo</h3>
+                            <div>
+                                <h3>Capítulos</h3>
+                                <p class="muted">Depois adicione as páginas e capítulos da história.</p>
+                            </div>
                         </div>
                         <form id="novo-capitulo-form" class="form-stack">
                             <label>
@@ -223,13 +239,6 @@
                             <button type="submit" class="btn-primary">Adicionar capítulo</button>
                         </form>
                     </aside>
-
-                    <article class="card write-card">
-                        <div class="section-head">
-                            <h2>Minhas histórias</h2>
-                        </div>
-                        <div id="autoria-historias" class="stack-list"></div>
-                    </article>
                 </section>
                 {% endif %}
 
@@ -294,89 +303,116 @@
                 <button id="reader-close" class="reader-close-btn" type="button" aria-label="Fechar leitura">✕</button>
             </div>
 
-            <div class="reader-top-controls">
-                <div class="reader-reading-time">
-                    <span class="time-label">Tempo de leitura</span>
-                    <div class="time-display">
-                        <span id="reader-session-time" class="time-value">0:00</span>
-                        <span class="time-unit">nesta sessão</span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="reader-settings-container">
-                <div class="reader-settings">
-                    <div class="reader-setting-group">
-                        <p class="reader-setting-title">Fonte</p>
-                        <div id="reader-font-options" class="reader-option-grid reader-font-grid">
-                            <button class="reader-option-card reader-font-card" data-reader-font="serif_classic" type="button" aria-pressed="false">
-                                <span class="reader-font-preview">Aa</span>
-                            </button>
-                            <button class="reader-option-card reader-font-card" data-reader-font="georgia" type="button" aria-pressed="false">
-                                <span class="reader-font-preview">Aa</span>
-                            </button>
-                            <button class="reader-option-card reader-font-card" data-reader-font="book" type="button" aria-pressed="false">
-                                <span class="reader-font-preview">Aa</span>
-                            </button>
-                            <button class="reader-option-card reader-font-card" data-reader-font="sans_clean" type="button" aria-pressed="false">
-                                <span class="reader-font-preview">Aa</span>
-                            </button>
+            <div class="reader-layout">
+                <aside class="reader-side-panel">
+                    <div class="reader-top-controls">
+                        <button id="reader-highlight" class="reader-tool-btn" type="button">Destacar</button>
+                        <div class="reader-reading-time">
+                            <div class="time-display">
+                                <span id="reader-session-time" class="time-value">0:00</span>
+                                <span class="time-unit">sessão</span>
+                            </div>
+                            <div class="time-display">
+                                <span id="reader-page-time" class="time-value">0:00</span>
+                                <span class="time-unit">página</span>
+                            </div>
+                            <div class="time-display">
+                                <span id="reader-chapter-time" class="time-value">0:00</span>
+                                <span class="time-unit">capítulo</span>
+                            </div>
+                            <div class="time-display">
+                                <span id="reader-book-time" class="time-value">0:00</span>
+                                <span class="time-unit">livro</span>
+                            </div>
                         </div>
                     </div>
-                    <div class="reader-setting-group">
-                        <label for="reader-font-size">Tamanho da letra</label>
-                        <input id="reader-font-size" type="range" min="16" max="30" step="1" value="19">
-                        <small id="reader-font-size-value" class="muted">19px</small>
-                    </div>
-                    <div class="reader-setting-group">
-                        <p class="reader-setting-title">Fundo</p>
-                        <div id="reader-bg-options" class="reader-option-grid reader-bg-options">
-                            <button class="reader-option-card reader-bg-card" data-reader-bg="paper_yellow" type="button" aria-pressed="false">
-                                <span class="reader-bg-swatch swatch-paper_yellow"></span>
-                            </button>
-                            <button class="reader-option-card reader-bg-card" data-reader-bg="cream" type="button" aria-pressed="false">
-                                <span class="reader-bg-swatch swatch-cream"></span>
-                            </button>
-                            <button class="reader-option-card reader-bg-card" data-reader-bg="off_white" type="button" aria-pressed="false">
-                                <span class="reader-bg-swatch swatch-off_white"></span>
-                            </button>
-                            <button class="reader-option-card reader-bg-card" data-reader-bg="sepia_dark" type="button" aria-pressed="false">
-                                <span class="reader-bg-swatch swatch-sepia_dark"></span>
-                            </button>
+
+                    <div class="reader-settings-container">
+                        <div class="reader-settings">
+                            <div class="reader-setting-group">
+                                <p class="reader-setting-title">Fonte</p>
+                                <div id="reader-font-options" class="reader-option-grid reader-font-grid">
+                                    <button class="reader-option-card reader-font-card" data-reader-font="serif_classic" type="button" aria-pressed="false">
+                                        <span class="reader-font-preview">Aa</span>
+                                    </button>
+                                    <button class="reader-option-card reader-font-card" data-reader-font="georgia" type="button" aria-pressed="false">
+                                        <span class="reader-font-preview">Aa</span>
+                                    </button>
+                                    <button class="reader-option-card reader-font-card" data-reader-font="book" type="button" aria-pressed="false">
+                                        <span class="reader-font-preview">Aa</span>
+                                    </button>
+                                    <button class="reader-option-card reader-font-card" data-reader-font="sans_clean" type="button" aria-pressed="false">
+                                        <span class="reader-font-preview">Aa</span>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="reader-setting-group">
+                                <label for="reader-font-size">Tamanho da letra</label>
+                                <input id="reader-font-size" type="range" min="16" max="30" step="1" value="19">
+                                <small id="reader-font-size-value" class="muted">19px</small>
+                            </div>
+                            <div class="reader-setting-group">
+                                <p class="reader-setting-title">Fundo</p>
+                                <div id="reader-bg-options" class="reader-option-grid reader-bg-options">
+                                    <button class="reader-option-card reader-bg-card" data-reader-bg="paper_yellow" type="button" aria-pressed="false">
+                                        <span class="reader-bg-swatch swatch-paper_yellow"></span>
+                                    </button>
+                                    <button class="reader-option-card reader-bg-card" data-reader-bg="cream" type="button" aria-pressed="false">
+                                        <span class="reader-bg-swatch swatch-cream"></span>
+                                    </button>
+                                    <button class="reader-option-card reader-bg-card" data-reader-bg="off_white" type="button" aria-pressed="false">
+                                        <span class="reader-bg-swatch swatch-off_white"></span>
+                                    </button>
+                                    <button class="reader-option-card reader-bg-card" data-reader-bg="sepia_dark" type="button" aria-pressed="false">
+                                        <span class="reader-bg-swatch swatch-sepia_dark"></span>
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
 
-            <article id="reader-content" class="reader-content"></article>
+                    <div class="reader-setting-group">
+                        <label for="reader-chapter-select">Capítulo</label>
+                        <select id="reader-chapter-select"></select>
+                    </div>
 
-            <div class="reader-page-nav">
-                <button id="reader-page-prev" class="btn-ghost" type="button">← Página anterior</button>
-                <span id="reader-page-counter" class="chip">Página 1 de 1</span>
-                <button id="reader-page-next" class="btn-ghost" type="button">Próxima página →</button>
-            </div>
+                    <div class="reader-page-nav">
+                        <button id="reader-page-prev" class="btn-ghost" type="button">← Página</button>
+                        <span id="reader-page-counter" class="chip">Página 1 de 1</span>
+                        <button id="reader-page-next" class="btn-ghost" type="button">Página →</button>
+                    </div>
 
-            <div class="reader-actions">
-                <div class="reader-chapter-nav">
-                    <button id="reader-prev" class="chapter-round-btn" type="button" aria-label="Capítulo anterior">◀</button>
-                    <button id="reader-next" class="chapter-round-btn" type="button" aria-label="Próximo capítulo">▶</button>
-                </div>
-                <div class="reader-progress-actions">
-                    <button id="reader-mark" class="btn-primary" type="button">Salvar progresso</button>
-                    <button id="reader-finish" class="btn-ghost" type="button">Concluir história</button>
-                </div>
-            </div>
+                    <div class="reader-actions">
+                        <div class="reader-progress-actions">
+                            <button id="reader-mark" class="btn-primary" type="button">Salvar progresso</button>
+                            <button id="reader-finish" class="btn-ghost" type="button">Concluir história</button>
+                        </div>
+                    </div>
 
-            <div class="comment-block">
-                <div class="section-head">
-                    <h3>Comentários</h3>
-                    <span id="reader-comments-count" class="chip">0</span>
-                </div>
-                <div id="reader-comments" class="stack-list"></div>
-                <form id="reader-comment-form" class="form-inline">
-                    <input id="reader-comment-input" type="text" placeholder="Escreva um comentário..." required>
-                    <button type="submit" class="btn-primary">Comentar</button>
-                </form>
+                    <details class="reader-marks-block">
+                        <summary>
+                            <span>Marcações</span>
+                            <span id="reader-marks-count" class="chip">0</span>
+                        </summary>
+                        <div id="reader-marks-list" class="reader-marks-list"></div>
+                    </details>
+
+                    <details class="comment-block">
+                        <summary>
+                            <span>Comentários</span>
+                            <span id="reader-comments-count" class="chip">0</span>
+                        </summary>
+                        <div id="reader-comments" class="stack-list"></div>
+                        <form id="reader-comment-form" class="form-inline">
+                            <input id="reader-comment-input" type="text" placeholder="Escreva um comentário..." required>
+                            <button type="submit" class="btn-primary">Comentar</button>
+                        </form>
+                    </details>
+                </aside>
+
+                <section class="reader-page-stage">
+                    <article id="reader-content" class="reader-content"></article>
+                </section>
             </div>
         </article>
     </section>

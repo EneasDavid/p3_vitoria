@@ -275,6 +275,7 @@ class UsuarioController:
                 'progresso': leitura['progresso'],
                 'biblioteca': leitura['biblioteca'],
                 'recomendacoes': leitura['recomendacoes'],
+                'marcacoes': leitura.get('marcacoes', []),
             },
             'autoria': {
                 'total': autoria['total'],
@@ -365,6 +366,54 @@ class UsuarioController:
         return HistoriaController.comentar_capitulo(historia_id, capitulo_id, conta['leitor_id'], conteudo)
 
     @staticmethod
+    def destacar_trecho_por_token(token: str, historia_id: str, capitulo_id: str, trecho: str) -> dict:
+        """Destaca um trecho de capítulo com o perfil de leitor autenticado."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+        conta = contexto['conta']
+        from app.controllers.historia_controller import HistoriaController
+        return HistoriaController.destacar_trecho(historia_id, capitulo_id, conta['leitor_id'], trecho)
+
+    @staticmethod
+    def remover_destaque_por_token(token: str, historia_id: str, capitulo_id: str, trecho: str) -> dict:
+        """Remove uma marcação do perfil de leitor autenticado."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+        conta = contexto['conta']
+        from app.controllers.historia_controller import HistoriaController
+        return HistoriaController.remover_destaque(historia_id, capitulo_id, conta['leitor_id'], trecho)
+
+    @staticmethod
+    def registrar_tempo_leitura_por_token(
+        token: str,
+        historia_id: str,
+        capitulo_id: str,
+        pagina_global: int,
+        segundos: int,
+    ) -> dict:
+        """Registra tempo de leitura acumulado para a conta logada."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+        leitor = contexto['leitor']
+
+        from app.controllers.historia_controller import historias_db, HistoriaController
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+        if not HistoriaController._buscar_capitulo(historia, capitulo_id):
+            return {'sucesso': False, 'erro': 'Capítulo não encontrado', 'codigo': 404}
+
+        tempo = leitor.registrar_tempo_leitura(historia_id, capitulo_id, pagina_global, segundos)
+        return {
+            'sucesso': True,
+            'mensagem': 'Tempo de leitura registrado.',
+            'tempo_leitura': tempo,
+        }
+
+    @staticmethod
     def editar_comentario_por_token(
         token: str,
         historia_id: str,
@@ -417,6 +466,7 @@ class UsuarioController:
             'painel': leitor.exibir_painel(),
             'biblioteca_total': leitor.biblioteca.obter_total_historias(),
             'progresso_total': len(leitor.progresso_leitura),
+            'tempo_leitura': leitor.obter_tempo_leitura(),
         }
 
     @staticmethod
@@ -699,6 +749,21 @@ class UsuarioController:
 
         biblioteca = UsuarioController.obter_biblioteca(usuario_id)
         recomendacoes = UsuarioController.obter_recomendacoes(usuario_id)
+        marcacoes = []
+
+        for historia in historias_db.values():
+            for capitulo in historia.capitulos:
+                for destaque in capitulo.destaques.values():
+                    usuarios = destaque.get('usuarios', [])
+                    if usuario_id not in usuarios:
+                        continue
+                    marcacoes.append({
+                        'historia_id': historia.id,
+                        'historia_titulo': historia.titulo,
+                        'capitulo_id': capitulo.id,
+                        'capitulo_titulo': capitulo.titulo,
+                        'trecho': destaque.get('trecho', ''),
+                    })
 
         return {
             'sucesso': True,
@@ -706,6 +771,7 @@ class UsuarioController:
             'progresso': progresso,
             'biblioteca': biblioteca.get('biblioteca', {}),
             'recomendacoes': recomendacoes.get('historias', []),
+            'marcacoes': marcacoes[-20:],
         }
 
     @staticmethod

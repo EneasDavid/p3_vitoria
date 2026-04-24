@@ -97,10 +97,54 @@ def garantir_comentario(historia, capitulo, usuario_id: str, conteudo: str):
     HistoriaController.comentar_capitulo(historia.id, capitulo.id, usuario_id, conteudo)
 
 
+def garantir_historia_varias_paginas(autor_id: str):
+    """Garante uma obra demo longa para testar páginas, capítulos e marcações."""
+    biblioteca_estelar = garantir_historia(
+        'A Biblioteca das Constelações',
+        'Uma bibliotecária descobre que cada livro aberto move uma estrela e muda o destino de uma cidade inteira.',
+        'Fantasia',
+        autor_id,
+    )
+
+    trechos_longos = [
+        'Clara atravessou o corredor central da biblioteca com a sensação de que as estantes respiravam devagar.',
+        'Cada lombada guardava uma pequena luz, e cada luz parecia responder ao som dos passos no assoalho antigo.',
+        'Quando abriu o primeiro volume, uma constelação inteira brilhou no teto e desenhou uma rota sobre sua mão.',
+        'O mapa não apontava para um lugar, mas para uma escolha que ela vinha adiando desde a infância.',
+        'Do lado de fora, os relógios da cidade pararam por um segundo, como se alguém tivesse virado uma página enorme.',
+        'Clara percebeu que ler ali não era observar uma história; era negociar com ela, palavra por palavra.',
+        'Quanto mais avançava, mais a cidade mudava: uma praça surgia, uma ponte desaparecia, uma janela aprendia outro céu.',
+        'Ainda assim, havia ternura naquele perigo, porque os livros pareciam pedir cuidado antes de obediência.',
+    ]
+    garantir_capitulo(
+        biblioteca_estelar,
+        'Capítulo 1: O catálogo vivo',
+        ' '.join(trechos_longos * 18),
+    )
+    garantir_capitulo(
+        biblioteca_estelar,
+        'Capítulo 2: A sala que muda de norte',
+        ' '.join(list(reversed(trechos_longos)) * 16),
+    )
+    garantir_capitulo(
+        biblioteca_estelar,
+        'Capítulo 3: Margens de poeira dourada',
+        ' '.join((trechos_longos[2:] + trechos_longos[:2]) * 17),
+    )
+    biblioteca_estelar.atualizar_status('completa')
+    return biblioteca_estelar
+
+
 def inicializar_dados_demo():
     """Inicializa um cenário com contas híbridas."""
     global DEMO_DADOS_INICIALIZADOS
-    if DEMO_DADOS_INICIALIZADOS or not DEMO_AUTO_SEED:
+    if not DEMO_AUTO_SEED:
+        return
+    if DEMO_DADOS_INICIALIZADOS:
+        demo = garantir_conta('Conta Demo', 'demo@storyflow.local', 'demo123')
+        if demo:
+            garantir_historia_varias_paginas(demo['autor_id'])
+            persistir_estado()
         return
 
     ana = garantir_conta('Ana Ribeiro', 'ana@example.com', 'senha123')
@@ -135,6 +179,7 @@ def inicializar_dados_demo():
         'Ficção Científica',
         ana['autor_id'],
     )
+    biblioteca_estelar = garantir_historia_varias_paginas(demo['autor_id'])
 
     garantir_capitulo(
         torre,
@@ -180,13 +225,14 @@ def inicializar_dados_demo():
         'A capitã Nara ouviu o alerta antes mesmo do radar registrar movimento.'
     )
 
-    for historia in [torre, cartas, bronze, aurora]:
+    for historia in [torre, cartas, bronze, aurora, biblioteca_estelar]:
         historia.atualizar_status('completa')
 
     garantir_avaliacao(torre, ana['leitor_id'], 5)
     garantir_avaliacao(torre, bruno['leitor_id'], 4)
     garantir_avaliacao(cartas, carla['leitor_id'], 5)
     garantir_avaliacao(bronze, ana['leitor_id'], 4)
+    garantir_avaliacao(biblioteca_estelar, ana['leitor_id'], 5)
 
     garantir_comentario(torre, torre_c2, bruno['leitor_id'], 'Esse corredor silencioso criou um clima muito bom.')
     garantir_comentario(bronze, bronze_c1, carla['leitor_id'], 'A ideia da rua apagada ficou excelente.')
@@ -459,6 +505,46 @@ def me_excluir_comentario():
         dados.get('comentario_id'),
     )
     return resposta_api(resultado, 200 if resultado['sucesso'] else 400)
+
+
+@app.route('/api/me/destaques', methods=['POST'])
+@require_auth
+def me_destacar_trecho():
+    dados = obter_json_requisicao()
+    resultado = UsuarioController.destacar_trecho_por_token(
+        g.auth_token,
+        dados.get('historia_id'),
+        dados.get('capitulo_id'),
+        dados.get('trecho'),
+    )
+    return resposta_api(resultado, 201 if resultado['sucesso'] else 400)
+
+
+@app.route('/api/me/destaques', methods=['DELETE'])
+@require_auth
+def me_remover_destaque():
+    dados = obter_json_requisicao()
+    resultado = UsuarioController.remover_destaque_por_token(
+        g.auth_token,
+        dados.get('historia_id'),
+        dados.get('capitulo_id'),
+        dados.get('trecho'),
+    )
+    return resposta_api(resultado, 200 if resultado['sucesso'] else 400)
+
+
+@app.route('/api/me/tempo-leitura', methods=['POST'])
+@require_auth
+def me_tempo_leitura():
+    dados = obter_json_requisicao()
+    resultado = UsuarioController.registrar_tempo_leitura_por_token(
+        g.auth_token,
+        dados.get('historia_id'),
+        dados.get('capitulo_id'),
+        dados.get('pagina_global'),
+        dados.get('segundos'),
+    )
+    return resposta_api(resultado, 201 if resultado['sucesso'] else 400)
 
 
 @app.route('/api/me/autoria/historias', methods=['GET'])

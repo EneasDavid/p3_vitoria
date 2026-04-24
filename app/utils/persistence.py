@@ -183,6 +183,7 @@ def _serializar_state(usuarios_db: dict, contas_db: dict, sessoes_db: dict, hist
 
         if isinstance(usuario, Leitor):
             dados['progresso_leitura'] = dict(usuario.progresso_leitura)
+            dados['sessoes_leitura'] = dict(usuario.sessoes_leitura)
             dados['biblioteca'] = {
                 categoria.value: [historia.id for historia in usuario.biblioteca.obter_historias_por_categoria(categoria)]
                 for categoria in CategoriaBiblioteca
@@ -225,6 +226,7 @@ def _serializar_state(usuarios_db: dict, contas_db: dict, sessoes_db: dict, hist
                     'visualizacoes': capitulo.visualizacoes,
                     'data_criacao': _iso(capitulo.data_criacao),
                     'data_atualizacao': _iso(capitulo.data_atualizacao),
+                    'destaques': dict(capitulo.destaques),
                     'avaliacoes': [
                         {
                             'id': av.id,
@@ -362,6 +364,9 @@ def _desserializar_state(state: dict, usuarios_db: dict, contas_db: dict, sessoe
                 capitulo.visualizacoes = int(capitulo_data.get('visualizacoes', 0))
                 capitulo.data_criacao = _parse_iso(capitulo_data.get('data_criacao'), capitulo.data_criacao)
                 capitulo.data_atualizacao = _parse_iso(capitulo_data.get('data_atualizacao'), capitulo.data_atualizacao)
+                destaques = capitulo_data.get('destaques', {})
+                if isinstance(destaques, dict):
+                    capitulo.destaques.update(destaques)
 
                 for comentario_data in capitulo_data.get('comentarios', []):
                     if not isinstance(comentario_data, dict):
@@ -437,6 +442,10 @@ def _desserializar_state(state: dict, usuarios_db: dict, contas_db: dict, sessoe
             progresso = dados.get('progresso_leitura', {})
             if isinstance(progresso, dict):
                 usuario.progresso_leitura = progresso
+
+            sessoes = dados.get('sessoes_leitura', {})
+            if isinstance(sessoes, dict):
+                usuario.sessoes_leitura = sessoes
 
             biblioteca = dados.get('biblioteca', {})
             if isinstance(biblioteca, dict):

@@ -101,6 +101,30 @@ class HistoriaController:
         }
 
     @staticmethod
+    def serializar_destaques(capitulo: Capitulo, historia: Historia, usuario_id: str | None = None) -> dict:
+        """Resume destaques do capítulo para o leitor."""
+        total_leitores = max(1, len(historia.leitores))
+        meus_trechos = []
+        todos = []
+        for destaque in capitulo.destaques.values():
+            usuarios = destaque.get('usuarios', [])
+            item = {
+                'trecho': destaque.get('trecho', ''),
+                'total': len(usuarios),
+                'percentual': round((len(usuarios) / total_leitores) * 100),
+            }
+            todos.append(item)
+            if usuario_id and usuario_id in usuarios:
+                meus_trechos.append(item['trecho'])
+
+        return {
+            'meus': meus_trechos,
+            'recomendados': capitulo.obter_destaques_recomendados(total_leitores),
+            'todos': sorted(todos, key=lambda item: item['total'], reverse=True),
+            'leitores_base': total_leitores,
+        }
+
+    @staticmethod
     def serializar_historia(historia: Historia, incluir_capitulos: bool = False, leitor_id: str | None = None) -> dict:
         """Converte uma história para JSON com dados voltados para leitura."""
         ultimo_capitulo = historia.obter_ultimo_capitulo()
@@ -390,6 +414,7 @@ class HistoriaController:
         usuario = usuarios_db.get(usuario_id) if usuario_id else None
         if usuario:
             historia.adicionar_leitor(usuario)
+        tempo_leitura = usuario.obter_tempo_leitura(historia.id) if isinstance(usuario, Leitor) else {'total_segundos': 0, 'capitulos': {}}
 
         indice_atual = historia.capitulos.index(capitulo)
         anterior = historia.capitulos[indice_atual - 1] if indice_atual > 0 else None
@@ -417,11 +442,66 @@ class HistoriaController:
                     HistoriaController.serializar_comentario(comentario)
                     for comentario in capitulo.comentarios[-5:]
                 ],
+                'destaques': HistoriaController.serializar_destaques(capitulo, historia, usuario_id),
             },
             'navegacao': {
                 'anterior_id': anterior.id if anterior else None,
                 'proximo_id': proximo.id if proximo else None,
-            }
+            },
+            'tempo_leitura': tempo_leitura,
+        }
+
+    @staticmethod
+    def destacar_trecho(historia_id: str, capitulo_id: str, usuario_id: str, trecho: str) -> dict:
+        """Registra destaque de trecho feito pelo leitor."""
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+
+        capitulo = HistoriaController._buscar_capitulo(historia, capitulo_id)
+        if not capitulo:
+            return {'sucesso': False, 'erro': 'Capítulo não encontrado', 'codigo': 404}
+
+        usuario = usuarios_db.get(usuario_id)
+        if not isinstance(usuario, Leitor):
+            return {'sucesso': False, 'erro': 'Leitor não encontrado', 'codigo': 404}
+
+        trecho_normalizado = " ".join(str(trecho or "").split())
+        if len(trecho_normalizado) < 8:
+            return {'sucesso': False, 'erro': 'Selecione um trecho maior para destacar', 'codigo': 400}
+        if len(trecho_normalizado) > 500:
+            return {'sucesso': False, 'erro': 'Destaque muito longo. Selecione até 500 caracteres.', 'codigo': 400}
+
+        capitulo.adicionar_destaque(usuario_id, trecho_normalizado)
+        historia.adicionar_leitor(usuario)
+        return {
+            'sucesso': True,
+            'mensagem': 'Trecho destacado.',
+            'destaques': HistoriaController.serializar_destaques(capitulo, historia, usuario_id),
+        }
+
+    @staticmethod
+    def remover_destaque(historia_id: str, capitulo_id: str, usuario_id: str, trecho: str) -> dict:
+        """Remove uma marcação do próprio leitor."""
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+
+        capitulo = HistoriaController._buscar_capitulo(historia, capitulo_id)
+        if not capitulo:
+            return {'sucesso': False, 'erro': 'Capítulo não encontrado', 'codigo': 404}
+
+        trecho_normalizado = " ".join(str(trecho or "").split())
+        if not trecho_normalizado:
+            return {'sucesso': False, 'erro': 'Trecho é obrigatório', 'codigo': 400}
+
+        if not capitulo.remover_destaque(usuario_id, trecho_normalizado):
+            return {'sucesso': False, 'erro': 'Marcação não encontrada', 'codigo': 404}
+
+        return {
+            'sucesso': True,
+            'mensagem': 'Marcação removida.',
+            'destaques': HistoriaController.serializar_destaques(capitulo, historia, usuario_id),
         }
 
     @staticmethod

@@ -26,6 +26,7 @@ class Capitulo:
         self.ordem = ordem
         self._comentarios: List['Comentario'] = []
         self._avaliacoes: List['Avaliacao'] = []
+        self._destaques: dict = {}
         self.data_criacao = datetime.now()
         self.data_atualizacao = datetime.now()
         self.visualizacoes = 0
@@ -58,6 +59,56 @@ class Capitulo:
     def avaliacoes(self) -> List['Avaliacao']:
         """Retorna lista de avaliações."""
         return self._avaliacoes
+
+    @property
+    def destaques(self) -> dict:
+        """Retorna os trechos destacados por leitores."""
+        return self._destaques
+
+    def adicionar_destaque(self, usuario_id: str, trecho: str):
+        """Registra que um leitor destacou um trecho do capítulo."""
+        trecho_normalizado = " ".join(str(trecho or "").split())
+        if not usuario_id or not trecho_normalizado:
+            return None
+
+        chave = trecho_normalizado.casefold()
+        destaque = self._destaques.setdefault(chave, {
+            'trecho': trecho_normalizado,
+            'usuarios': [],
+        })
+        if usuario_id not in destaque['usuarios']:
+            destaque['usuarios'].append(usuario_id)
+            self.data_atualizacao = datetime.now()
+        return destaque
+
+    def remover_destaque(self, usuario_id: str, trecho: str) -> bool:
+        """Remove a marcação de um leitor para um trecho."""
+        trecho_normalizado = " ".join(str(trecho or "").split())
+        chave = trecho_normalizado.casefold()
+        destaque = self._destaques.get(chave)
+        if not destaque or usuario_id not in destaque.get('usuarios', []):
+            return False
+
+        destaque['usuarios'].remove(usuario_id)
+        if not destaque['usuarios']:
+            self._destaques.pop(chave, None)
+        self.data_atualizacao = datetime.now()
+        return True
+
+    def obter_destaques_recomendados(self, total_leitores: int, percentual_minimo: float = 0.6) -> list[dict]:
+        """Retorna trechos marcados por leitores suficientes para recomendação."""
+        base = max(1, total_leitores)
+        recomendados = []
+        for destaque in self._destaques.values():
+            usuarios = destaque.get('usuarios', [])
+            percentual = len(usuarios) / base
+            if percentual >= percentual_minimo:
+                recomendados.append({
+                    'trecho': destaque.get('trecho', ''),
+                    'total': len(usuarios),
+                    'percentual': round(percentual * 100),
+                })
+        return sorted(recomendados, key=lambda item: item['total'], reverse=True)
 
     def obter_media_avaliacoes(self) -> float:
         """Calcula a média de avaliações do capítulo."""
