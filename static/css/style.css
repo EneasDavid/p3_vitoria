@@ -35,7 +35,7 @@ body {
     line-height: 1.55;
 }
 
-a {
+a, .btn-primary .writer-add-book-card{
     color: inherit;
     text-decoration: none;
 }
@@ -115,14 +115,14 @@ textarea {
 
 .btn-primary,
 .btn-ghost {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border-radius: 10px;
-    padding: 10px 16px;
-    font-weight: 700;
-    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    border-radius: 10px !important;
+    padding: 10px 16px !important;
+    font-weight: 700 !important;
+    transition: transform 0.2s ease, background 0.2s ease, border-color 0.2s ease !important;
 }
 
 .btn-primary {
@@ -257,12 +257,12 @@ textarea {
     font-size: 0.94rem;
 }
 
-.auth-switch a {
+.auth-switch a, .btn-primary .writer-add-book-card {
     color: #d9d0ff;
     font-weight: 700;
 }
 
-.auth-switch a:hover {
+.auth-switch a:hover, .btn-primary .writer-add-book-card:hover {
     color: #ffffff;
 }
 
@@ -389,6 +389,35 @@ textarea {
 .main-topbar h1 {
     font-size: clamp(1.4rem, 2.4vw, 2.1rem);
     line-height: 1.1;
+}
+
+/* Rating badge on story cards */
+.rating-badge {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-top: 6px;
+    font-size: 13px;
+    color: var(--muted);
+    opacity: 0.95;
+}
+.rating-badge .rating-avg {
+    font-weight: 700;
+    color: var(--accent);
+}
+.rating-badge .rating-count {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+/* Micro feedback animation when user votes */
+.rating-badge.pulse {
+    animation: pulse-pop .52s ease forwards;
+}
+@keyframes pulse-pop {
+    0% { transform: scale(1); opacity: 1; }
+    40% { transform: scale(1.18); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
 }
 
 .topbar-actions {
@@ -583,7 +612,29 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     letter-spacing: 0.08em;
     font-size: 0.98rem;
 }
+.btn-trash-action {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    color: #666;             /* Cor inicial do ícone */
+    border: 1px solid #ddd;
+    padding: 8px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
 
+/* O SVG usa 'currentColor', então ele vai mudar junto com o texto no hover */
+.btn-trash-action svg {
+    stroke: currentColor; 
+}
+
+.btn-trash-action:hover {
+    background-color: #dc3545;
+    color: white;             /* O ícone SVG também ficará branco aqui */
+    border-color: #dc3545;
+}
 .rating-range-hidden {
     position: absolute;
     opacity: 0;
@@ -607,6 +658,19 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     transition: color 0.15s ease, transform 0.15s ease;
 }
 
+/* Reset button defaults when hover-star is a button */
+.hover-star {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-appearance: none;
+    appearance: none;
+}
+
 .hover-star.is-active {
     color: #ffd26e;
 }
@@ -614,6 +678,13 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
 .hover-star:hover {
     color: #ffdd8c;
     transform: translateY(-1px);
+}
+
+/* Focus styles for accessibility */
+.hover-star:focus {
+    outline: 2px solid rgba(255,210,110,0.25);
+    box-shadow: 0 0 0 4px rgba(255,210,110,0.12);
+    border-radius: 4px;
 }
 
 .rating-hover-tip {
@@ -831,7 +902,7 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
 }
 
 .writer-add-book-card {
-    min-height: 220px;
+    /* min-height: 220px; */
     display: grid;
     place-items: center;
     align-content: center;

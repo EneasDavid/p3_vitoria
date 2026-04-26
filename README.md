@@ -25,7 +25,7 @@ python3 -m pip install -r requirements.txt
 python3 main.py
 ```
 
-Acesse `http://localhost:5000`.
+Acesse `http://localhost:5219`.
 
 ## Conectando ao Firebase Firestore
 

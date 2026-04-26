@@ -97,6 +97,8 @@ function cacheElements() {
     el.historiaSubmit = document.getElementById('historia-submit');
     el.writerModalChaptersList = document.getElementById('writer-modal-chapters-list');
     el.storyCoverInput = document.getElementById('story-cover-input');
+    el.storyFileInput = document.getElementById('story-file-input');
+    el.storyPreviewInput = document.getElementById('story-preview-input');
     el.capituloHistoriaId = document.getElementById('capitulo-historia-id');
     el.capituloEditId = document.getElementById('capitulo-edit-id');
     el.capituloFormTitle = document.getElementById('capitulo-form-title');
@@ -304,21 +306,6 @@ async function garantirSessao() {
     }
 
     try {
-        if (action === 'comentar-marcacao') {
-            const marcacaoId = button.dataset.marcacaoId;
-            const texto = prompt('Escreva um comentário sobre essa marcação:');
-            if (!texto) {
-                return;
-            }
-            const response = await api('/me/marcacoes/comentar', {
-                method: 'POST',
-                body: {marcacao_id: marcacaoId, conteudo: texto},
-            });
-            showToast(response.mensagem || 'Comentário adicionado.');
-            await carregarPainel();
-            renderVoce();
-            return;
-        }
         const response = await api('/auth/me');
         state.user = response.usuario;
         atualizarIdentidadeUI();
@@ -581,7 +568,7 @@ function renderDetalheHistoria() {
         <h3>${escapeHtml(story.titulo)}</h3>
         <p class="muted">por ${escapeHtml(story.autor || 'Autor desconhecido')}</p>
         <p class="muted">${escapeHtml(story.sinopse)}</p>
-        <p class="meta-line">${story.total_capitulos} capítulos · nota ${Number(story.media_avaliacoes || 0).toFixed(1)}</p>
+        <p class="meta-line">${story.total_capitulos} capítulos · nota ${Number(story.media_avaliacoes || 0).toFixed(1)} (${Number(story.total_avaliacoes || 0)} avaliações)</p>
         ${typeof progresso === 'number' ? `<p class="muted">Seu progresso: ${progresso}%</p>` : ''}
         <div class="inline-actions">
             <button class="btn-primary" data-action="abrir-capitulo" data-story-id="${story.id}" data-chapter-id="${story.progresso_leitor?.capitulo_id || story.capitulo_inicial_id || ''}" type="button">Ler</button>
@@ -589,13 +576,9 @@ function renderDetalheHistoria() {
         </div>
         <div class="rating-range-card">
             <label for="story-rating-range" class="muted">Sua avaliação</label>
-            <div class="rating-range-head">
-                <span id="story-rating-stars">${renderStarsText(5)}</span>
-                <strong id="story-rating-value">5</strong>
-            </div>
             <div id="story-rating-hover" class="rating-stars-hover" role="group" aria-label="Selecionar nota" data-rating-selected="5">
                 ${[1, 2, 3, 4, 5].map((valor) => `
-                    <span class="hover-star is-active" data-hover-star="${valor}" aria-hidden="true">★</span>
+                    <button type="button" class="hover-star is-active" data-hover-star="${valor}" data-action="avaliar-historia" data-story-id="${story.id}" data-nota="${valor}" aria-label="Avaliar ${valor} estrelas">★</button>
                 `).join('')}
             </div>
             <p class="muted rating-hover-tip">Passe o mouse nas estrelas e clique para fixar a nota.</p>
@@ -609,7 +592,6 @@ function renderDetalheHistoria() {
                 data-story-id="${story.id}"
                 class="rating-range-hidden"
             >
-            <button class="btn-ghost" data-action="avaliar-historia-range" data-story-id="${story.id}" type="button">Enviar avaliação</button>
         </div>
         <div class="stack-list">
             ${(story.capitulos || []).map((chapter) => `
@@ -623,7 +605,11 @@ function renderDetalheHistoria() {
             `).join('')}
         </div>
     `;
-    atualizarSeletorAvaliacao(5);
+    // initialize rating selector with user's own rating if available, otherwise use rounded média
+    const initialRating = (typeof story.minha_avaliacao === 'number' && story.minha_avaliacao > 0)
+        ? Number(story.minha_avaliacao)
+        : Math.max(1, Math.min(5, Math.round(Number(story.media_avaliacoes || 0) || 5)));
+    atualizarSeletorAvaliacao(initialRating);
 }
 
 function renderBiblioteca() {
@@ -775,9 +761,15 @@ function abrirEditorAutoria(storyId = null) {
     }
 
     if (historia && el.formNovaHistoria) {
-        el.formNovaHistoria.elements.titulo.value = historia.titulo || '';
-        el.formNovaHistoria.elements.genero.value = historia.genero || '';
-        el.formNovaHistoria.elements.sinopse.value = historia.sinopse || '';
+        if (el.formNovaHistoria.elements && el.formNovaHistoria.elements.titulo) {
+            el.formNovaHistoria.elements.titulo.value = historia.titulo || '';
+        }
+        if (el.formNovaHistoria.elements && el.formNovaHistoria.elements.genero) {
+            el.formNovaHistoria.elements.genero.value = historia.genero || '';
+        }
+        if (el.formNovaHistoria.elements && el.formNovaHistoria.elements.sinopse) {
+            el.formNovaHistoria.elements.sinopse.value = historia.sinopse || '';
+        }
     }
 
     if (el.writerEditorTitle) {
@@ -975,17 +967,17 @@ function renderVoce() {
 
 function renderStoryCard(story) {
     return `
-        <article class="story-card">
-            ${renderStoryCover(story)}
-            <div class="story-body">
-                <p class="chip">${escapeHtml(story.genero || 'Leitura')}</p>
-                <h4>${escapeHtml(story.titulo)}</h4>
-                <p class="muted">${escapeHtml(story.sinopse)}</p>
-                <p class="meta-line">${escapeHtml(story.autor || 'Autor')} · ${story.total_capitulos} capítulos</p>
-                <div class="inline-actions">
-                    <button class="btn-ghost" data-action="selecionar-historia" data-story-id="${story.id}" type="button">Detalhes</button>
-                    <button class="btn-primary" data-action="salvar-historia" data-story-id="${story.id}" data-categoria="lendo" type="button">Salvar</button>
-                </div>
+        <article class="writer-book-card ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}" data-story-id="${escapeAttribute(story.id)}">
+            <button class="writer-book-cover" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}" type="button" aria-label="Abrir ${escapeAttribute(story.titulo)}">
+                ${renderStoryCover(story)}
+            </button>
+            <div class="writer-book-info">
+                <strong>${escapeHtml(story.titulo)}</strong>
+                <span>${story.total_capitulos} capítulos · ${escapeHtml(story.genero || 'Geral')}</span>
+                        <div class="rating-badge" aria-hidden="false" role="button" tabindex="0" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}">
+                            <span class="rating-avg">${Number(story.media_avaliacoes || 0).toFixed(1)}</span>
+                            <span class="rating-count">(${Number(story.total_avaliacoes || 0)})</span>
+                        </div>
             </div>
         </article>
     `;
@@ -1009,12 +1001,7 @@ async function recarregarHistoriasComTratamento() {
 }
 
 async function handleStoryActionClick(event) {
-    const hoverStar = event.target.closest('[data-hover-star]');
-    if (hoverStar) {
-        const nota = Number(hoverStar.dataset.hoverStar || 1);
-        atualizarSeletorAvaliacao(nota);
-        return;
-    }
+    // hover effects are handled by mouseover/mouseout listeners; clicks should be handled below
 
     const button = event.target.closest('[data-action]');
 
@@ -1121,6 +1108,34 @@ async function publicarHistoria(event) {
             }
             payload.capa = await lerArquivoComoDataURL(coverFile);
         }
+        // suporte a EPUB e preview (MOV/MP4)
+        const epubFile = el.storyFileInput?.files?.[0];
+        if (epubFile) {
+            const tiposPermitidosEpub = new Set(['application/epub+zip', 'application/octet-stream']);
+            const name = String(epubFile.name || '').toLowerCase();
+            if (!tiposPermitidosEpub.has(epubFile.type) && !name.endsWith('.epub')) {
+                showToast('Formato de arquivo EPUB inválido. Use .epub.', true);
+                return;
+            }
+            if (epubFile.size > 20 * 1024 * 1024) {
+                showToast('EPUB muito grande. Use até 20MB.', true);
+                return;
+            }
+            payload.epub = await lerArquivoComoDataURL(epubFile);
+        }
+        const previewFile = el.storyPreviewInput?.files?.[0];
+        if (previewFile) {
+            const tiposPermitidosPreview = new Set(['video/quicktime', 'video/mp4']);
+            if (!tiposPermitidosPreview.has(previewFile.type)) {
+                showToast('Formato de preview inválido. Use MOV ou MP4.', true);
+                return;
+            }
+            if (previewFile.size > 10 * 1024 * 1024) {
+                showToast('Preview muito grande. Use até 10MB.', true);
+                return;
+            }
+            payload.preview = await lerArquivoComoDataURL(previewFile);
+        }
 
         const endpoint = editando
             ? `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}`
@@ -1201,10 +1216,59 @@ async function avaliarHistoria(storyId, nota) {
         body: {historia_id: storyId, nota},
     });
     showToast(response.mensagem || 'Avaliação registrada.');
-    await carregarCatalogo();
-    if (state.page === 'historias') {
-        await selecionarHistoria(storyId);
-        renderHistorias();
+
+    // Update only the affected story in state to avoid full reload
+    try {
+        const media = Number(response.media_atual || 0);
+        const total = Number(response.total_avaliacoes || 0);
+
+        // update catalog item
+        const idx = state.catalogo.findIndex((s) => s.id === storyId);
+        if (idx >= 0) {
+            state.catalogo[idx].media_avaliacoes = media;
+            state.catalogo[idx].total_avaliacoes = total;
+        }
+
+        // animate micro-feedback badge on the card if present
+        try {
+            const cardBadge = document.querySelector(`.writer-book-card[data-story-id="${storyId}"] .rating-badge`);
+            if (cardBadge) {
+                cardBadge.classList.remove('pulse');
+                // reflow to restart animation
+                // eslint-disable-next-line no-unused-expressions
+                cardBadge.offsetWidth;
+                cardBadge.classList.add('pulse');
+                setTimeout(() => cardBadge.classList.remove('pulse'), 700);
+                // update numbers in the badge
+                const avgEl = cardBadge.querySelector('.rating-avg');
+                const cntEl = cardBadge.querySelector('.rating-count');
+                if (avgEl) avgEl.textContent = media.toFixed(1);
+                if (cntEl) cntEl.textContent = `(${total})`;
+            }
+        } catch (e) {
+            // ignore animation errors
+        }
+
+        // update detail view if open
+        if (state.historiaDetalhe && state.historiaDetalhe.id === storyId) {
+            state.historiaDetalhe.media_avaliacoes = media;
+            state.historiaDetalhe.total_avaliacoes = total;
+            state.historiaDetalhe.minha_avaliacao = nota;
+            atualizarSeletorAvaliacao(nota);
+            renderDetalheHistoria();
+        }
+
+        // refresh lists that show média
+        if (state.page === 'historias') {
+            renderHistorias();
+        } else if (state.page === 'inicio') {
+            renderInicio();
+        }
+    } catch (e) {
+        // fallback: reload catalog and detail
+        await carregarCatalogo();
+        try { await selecionarHistoria(storyId); } catch (err) {}
+        if (state.page === 'historias') renderHistorias(); else renderDetalheHistoria();
     }
 }
 

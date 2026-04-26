@@ -565,6 +565,8 @@ def me_autoria_publicar():
         dados.get('sinopse'),
         dados.get('genero'),
         dados.get('capa'),
+        epub_data=dados.get('epub'),
+        preview_video=dados.get('preview'),
     )
     return resposta_api(resultado, 201 if resultado['sucesso'] else 400)
 
@@ -662,4 +664,4 @@ def erro_servidor(error):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='0.0.0.0', port=5219)

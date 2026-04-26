@@ -300,14 +300,20 @@ class UsuarioController:
         )
 
     @staticmethod
-    def publicar_historia(token: str, titulo: str, sinopse: str, genero: str, capa: str | None = None) -> dict:
-        """Publica uma nova história usando o perfil de autor da conta logada."""
+    def publicar_historia(token: str, titulo: str, sinopse: str, genero: str, capa: str | None = None, epub_data: str | None = None, preview_video: str | None = None) -> dict:
+        """Publica uma nova história usando o perfil de autor da conta logada.
+        Suporta envio de EPUB e vídeo de preview (data URLs) para criação automática de capítulos.
+        """
         contexto = UsuarioController._obter_contexto_autenticado(token)
         if not contexto['sucesso']:
             return contexto
 
         conta = contexto['conta']
         from app.controllers.historia_controller import HistoriaController
+        if epub_data:
+            return HistoriaController.criar_historia_com_epub(
+                titulo, sinopse, genero, conta['autor_id'], capa=capa, epub_data=epub_data, preview_video=preview_video
+            )
         return HistoriaController.criar_historia(titulo, sinopse, genero, conta['autor_id'], capa=capa)
 
     @staticmethod

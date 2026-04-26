@@ -33,6 +33,8 @@ class Historia:
         self.data_criacao = datetime.now()
         self.data_atualizacao = datetime.now()
         self.status = "em_escrita"  # em_escrita, pausada, completa, abandonada
+        self.arquivo_epub: str | None = None
+        self.preview_video: str | None = None
 
     def adicionar_capitulo(self, capitulo: 'Capitulo'):
         """Adiciona um novo capítulo à história."""

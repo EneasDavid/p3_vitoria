@@ -5,11 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StoryFlow | {{ pagina|capitalize }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/write-modal.css') }}">
 </head>
 <body class="app-body" data-page="{{ pagina }}">
     <div class="app-layout">
         <aside class="sidebar">
-            <a href="/app/inicio" class="logo-badge user-avatar" id="sidebar-avatar" aria-label="Ir para início">
+            <a href="/app/voce" class="logo-badge user-avatar" id="sidebar-avatar" aria-label="Ir para início">
                 <span id="sidebar-avatar-letter">U</span>
             </a>
             <nav class="side-nav">
@@ -51,15 +52,6 @@
                     </span>
                     Escrever
                 </a>
-                <a href="/app/voce" class="nav-item {% if pagina == 'voce' %}active{% endif %}">
-                    <span class="nav-icon" aria-hidden="true">
-                        <svg viewBox="0 0 24 24" fill="none">
-                            <circle cx="12" cy="8" r="3.2" />
-                            <path d="M5 20a7 7 0 0 1 14 0" />
-                        </svg>
-                    </span>
-                    Você
-                </a>
             </nav>
             <button id="logout-button" class="nav-logout" type="button">Sair</button>
         </aside>
@@ -67,7 +59,8 @@
         <div class="main-shell">
             <header class="main-topbar">
                 <div>
-                    <p class="eyebrow">Bem-vindo de volta</p>
+                <script src="/static/js/write-modal.js"></script>
+                <script src="/static/js/write-modal-integration.js"></script>
                     <h1><span id="header-user-name">Usuário</span></h1>
                 </div>
                 <div class="topbar-actions">
@@ -80,15 +73,7 @@
             <main class="screen-shell">
                 {% if pagina == 'inicio' %}
                 <section class="screen">
-                    <div class="grid-main">
-                        <article class="card card-highlight" id="inicio-destaque">
-                            <p class="placeholder">Carregando destaque...</p>
-                        </article>
-                        <aside class="card" id="inicio-recomendacoes">
-                            <h3>Recomendados para você</h3>
-                            <p class="placeholder">Carregando recomendações...</p>
-                        </aside>
-                    </div>
+
 
                     <article class="card card-player" id="inicio-continuar">
                         <p class="placeholder">Preparando leitura em andamento...</p>
@@ -202,19 +187,26 @@
                                     <h2 id="perfil-nome">Usuário</h2>
                                     <p id="perfil-email" class="muted">email@storyflow</p>
                                 </div>
+                                <button id="profile-photo-remove" class="btn-trash-action" type="button" title="Remover foto">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3 6 5 6 21 6"></polyline>
+                                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        <line x1="10" y1="11" x2="10" y2="17"></line>
+                                        <line x1="14" y1="11" x2="14" y2="17"></line>
+                                    </svg>
+                                </button>
                             </div>
                             <p class="muted">
                                 No StoryFlow você é leitor e autor ao mesmo tempo: lê, comenta,
                                 salva na biblioteca e publica no mesmo perfil.
                             </p>
-                            <form id="profile-photo-form" class="form-inline profile-photo-form">
+                            <form id="profile-photo-form" class="form-inline profile-photo-form" style="display: none !important">
                                 <input id="profile-photo-input" type="file" accept="image/png,image/jpeg,image/webp">
                                 <button type="submit" class="btn-primary" style="display:none">Salvar foto</button>
                             </form>
                             <p class="muted">Clique na sua foto para alterar.</p>
-                            <button id="profile-photo-remove" class="btn-ghost profile-photo-remove" type="button">
-                                Remover foto
-                            </button>
+                        
                         </article>
                         <aside class="card" id="voce-stats">
                             <h3>Seu resumo</h3>
@@ -245,72 +237,115 @@
         <div id="writer-editor-backdrop" class="writer-editor-backdrop"></div>
         <article class="writer-editor-card">
             <header class="writer-editor-head">
-                <div>
-                    <p id="writer-editor-mode" class="chip">Livro</p>
-                    <h2 id="writer-editor-title">Novo livro</h2>
-                </div>
-                <button id="writer-editor-close" class="writer-editor-close" type="button" aria-label="Fechar editor">×</button>
-                </header>
-                
-                <div class="writer-editor-grid">
-                    <section class="writer-editor-section">
-                        <div class="section-head">
-                            <div>
-                                <h2>Capa e dados</h2>
-                                <p class="muted">Defina título, capa, gênero e sinopse do livro.</p>
-                            </div>
+                <div class="head-left">
+                    <div class="book-icon" aria-hidden="true">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M4 19.5C4 18.3954 5.11929 17.5 6.5 17.5H20" stroke="#9b59ff" stroke-width="1.6"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                            <path d="M20 6.5H6.5C5.11929 6.5 4 7.39543 4 8.5V19.5" stroke="#6c2bd9" stroke-width="1.6"
+                                stroke-linecap="round" stroke-linejoin="round" />
+                        </svg>
                     </div>
-                    <form id="nova-historia-form" class="form-stack">
-                        <input id="historia-edit-id" type="hidden" name="historia_id" value="">
-                        <label>
-                            Título
-                            <input type="text" name="titulo" required placeholder="Título da história">
+                    <h2 id="writer-editor-title">Criar história</h2>
+                    </div>
+                    <button id="writer-editor-close" class="writer-editor-close modal-close" type="button"
+                        aria-label="Fechar editor">×</button>
+                    </header>
+
+            <div class="modal-body writer-editor-grid">
+                <aside class="left-col">
+                    <section class="step">
+                        <div class="step-head"><span class="step-num">1</span>
+                            <div class="step-meta">(Obrigatório) Capa e Título</div>
+                        </div>
+                        <form id="nova-historia-form" class="form-stack">
+                            <input id="historia-edit-id" type="hidden" name="historia_id" value="">
+                            <label class="upload-area" for="story-cover-input" aria-label="Adicionar Capa da História (obrigatório)">
+                                <div class="upload-inner">Adicionar Capa da História (obrigatório)
+                                    <div class="upload-hint">Arraste aqui ou clique para selecionar</div>
+                                </div>
+                                <input id="story-cover-input" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden">
+                            </label>
+                            <label class="field" style="margin-top:8px">
+                                <span class="field-label">Importar EPUB (opcional)</span>
+                                <input id="story-file-input" type="file" accept=".epub,application/epub+zip" class=""> 
+                                <small class="muted">Enviar um arquivo .epub importará metadados (capa, título, capítulos).</small>
+                            </label>
+                            <label class="field" style="margin-top:8px">
+                                <span class="field-label">Preview (MOV/MP4) (opcional)</span>
+                                <input id="story-preview-input" type="file" accept="video/quicktime,video/mp4" class=""> 
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Título da História</span>
+                                <input type="text" name="titulo" required placeholder="Título da história">
+                            </label>
+                            <div style="margin-top:12px">
+                                <button id="historia-submit-create" type="submit" class="btn-primary">Criar livro</button>
+                            </div>
+                            </form>
+                            </section>
+                            
+                            <section class="step">
+                                <div class="step-head"><span class="step-num">2</span>
+                                    <div class="step-meta">(Opcional) Sinopse</div>
+                                </div>
+                                <label class="field">
+                                    <span class="field-label">Sinopse da História (opcional)</span>
+                                    <textarea name="sinopse" id="story-synopsis" placeholder="Escreva uma sinopse curta..."></textarea>
                         </label>
-                        <label>
-                            Gênero
-                            <input type="text" name="genero" required placeholder="Romance, fantasia...">
-                        </label>
-                        <label>
-                            Capa da história
-                            <input id="story-cover-input" type="file" accept="image/png,image/jpeg,image/webp">
-                        </label>
-                        <label>
-                            Sinopse
-                            <textarea name="sinopse" required placeholder="Escreva uma sinopse envolvente"></textarea>
-                        </label>
-                        <button id="historia-submit" type="submit" class="btn-primary">Criar livro</button>
-                    </form>
+                    </section>
+                    </aside>
+                    
+                    <main class="right-col">
+                        <section class="step step-right-step">
+                            <div class="step-head"><span class="step-num">2</span>
+                                <div class="step-meta">(Opcional) Sinopse</div>
+                            </div>
+                            <div class="mirror-synopsis">(continuação visual)</div>
                     </section>
 
-                <section class="writer-editor-section">
-                    <div class="section-head">
-                        <div>
-                            <h3 id="capitulo-form-title">Capítulos</h3>
-                            <p id="capitulo-form-hint" class="muted">Crie o livro para adicionar capítulos.</p>
+                    <section class="step">
+                        <div class="step-head"><span class="step-num">3</span>
+                            <div class="step-meta">Editando Capítulo, Conteúdo do Capítulo</div>
                         </div>
-                    </div>
-                    <div id="writer-modal-chapters-list" class="writer-chapter-list"></div>
-                    <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
-                        <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
-                        <label>
-                            História
-                            <select id="capitulo-historia-id" name="historia_id" required></select>
-                        </label>
-                        <label>
-                            Título do capítulo
-                            <input type="text" name="titulo" required placeholder="Capítulo 1...">
-                        </label>
-                        <label>
-                            Conteúdo
-                            <textarea name="conteudo" required placeholder="Escreva o capítulo aqui"></textarea>
-                        </label>
-                        <button id="capitulo-submit" type="submit" class="btn-primary">Adicionar capítulo</button>
-                        <button id="capitulo-edit-cancel" type="button" class="btn-ghost hidden">Cancelar edição</button>
-                    </form>
+                        <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
+                            <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
+                            <label class="field">
+                                <span class="field-label">Título do Capítulo</span>
+                                <input id="chapter-title" type="text" name="titulo" required placeholder="Título do capítulo">
+                            </label>
+                            <div class="editor">
+                                <div class="toolbar" role="toolbar" aria-label="Barra de ferramentas de edição">
+                                    <button class="tb-btn" type="button" data-cmd="bold" title="Negrito"><strong>B</strong></button>
+                                    <button class="tb-btn" type="button" data-cmd="italic" title="Itálico"><em>I</em></button>
+                                    <button class="tb-btn" type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
+                                    <button class="tb-btn" type="button" data-cmd="insertUnorderedList" title="Lista com marcadores">•</button>
+                                    <button class="tb-btn" type="button" data-cmd="insertOrderedList" title="Lista numerada">1.</button>
+                                    <select id="font-select" class="tb-select" title="Fonte">
+                                        <option value="serif">Serif</option>
+                                        <option value="Georgia">Georgia</option>
+                                        <option value="Times New Roman">Times</option>
+                                        <option value="sans-serif">Sans</option>
+                                    </select>
+                                    <label class="size-control">Tamanho
+                                        <input id="font-size" type="range" min="12" max="40" value="24">
+                                    </label>
+                                </div>
+                                
+                                <textarea name="conteudo" id="editor-textarea" class="editor-area"
+                                    placeholder="Escreva o capítulo aqui">Capítulo 1: O Início... algumas palavras em negrito e outras em itálico.</textarea>
+                                
+                                <div class="editor-actions">
+                                    <button id="add-chapter" class="btn-outline" type="button">Adicionar Novo Capítulo</button>
+                                    <button id="finish-chapter" class="btn-primary" type="button">Finalizar Capítulo</button>
+                                </div>
+                                </div>
+                                </form>
                     </section>
-                    </div>
+                </main>
+            </div>
         </article>
-        </section>
+    </section>
         
         <section id="reader-modal" class="reader-modal hidden" aria-hidden="true">
             <div id="reader-modal-backdrop" class="reader-backdrop"></div>
