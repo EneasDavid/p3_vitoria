@@ -72,7 +72,8 @@
                 </div>
                 <div class="topbar-actions">
                     <input id="global-search" type="search" placeholder="Buscar fanfics...">
-                    <a class="btn-primary" href="/app/escrever">+ Escrever</a>
+                    <button class="btn-primary writer-add-book-card" style="width: 140.6875px !important;">+
+                        Escrever</button>
                 </div>
             </header>
 
@@ -182,63 +183,11 @@
                         <div class="section-head">
                             <div>
                                 <h2>Biblioteca de criação</h2>
-                                <p class="muted">Escolha uma história criada ou comece uma nova capa.</p>
+                                <p class="muted">Clique na capa para gerenciar capítulos ou use + para criar outro livro.</p>
                             </div>
                         </div>
-                        <div id="autoria-historias" class="stack-list"></div>
+                        <div id="autoria-historias" class="writer-shelf"></div>
                     </article>
-
-                    <article class="card write-card">
-                        <div class="section-head">
-                            <div>
-                                <h2>Capa e dados</h2>
-                                <p class="muted">Primeiro defina título, capa e resumo da obra.</p>
-                            </div>
-                        </div>
-                        <form id="nova-historia-form" class="form-stack">
-                            <label>
-                                Título
-                                <input type="text" name="titulo" required placeholder="Título da história">
-                            </label>
-                            <label>
-                                Gênero
-                                <input type="text" name="genero" required placeholder="Romance, fantasia...">
-                            </label>
-                            <label>
-                                Capa da história
-                                <input id="story-cover-input" type="file" accept="image/png,image/jpeg,image/webp">
-                            </label>
-                            <label>
-                                Sinopse
-                                <textarea name="sinopse" required placeholder="Escreva uma sinopse envolvente"></textarea>
-                            </label>
-                            <button type="submit" class="btn-primary">Criar capa da história</button>
-                        </form>
-                    </article>
-
-                    <aside class="card write-card">
-                        <div class="section-head">
-                            <div>
-                                <h3>Capítulos</h3>
-                                <p class="muted">Depois adicione as páginas e capítulos da história.</p>
-                            </div>
-                        </div>
-                        <form id="novo-capitulo-form" class="form-stack">
-                            <label>
-                                História
-                                <select id="capitulo-historia-id" name="historia_id" required></select>
-                            </label>
-                            <label>
-                                Título do capítulo
-                                <input type="text" name="titulo" required placeholder="Capítulo 1...">
-                            </label>
-                            <label>
-                                Conteúdo
-                                <textarea name="conteudo" required placeholder="Escreva o capítulo aqui"></textarea>
-                            </label>
-                            <button type="submit" class="btn-primary">Adicionar capítulo</button>
-                        </form>
-                    </aside>
                 </section>
                 {% endif %}
 
@@ -260,8 +209,9 @@
                             </p>
                             <form id="profile-photo-form" class="form-inline profile-photo-form">
                                 <input id="profile-photo-input" type="file" accept="image/png,image/jpeg,image/webp">
-                                <button type="submit" class="btn-primary">Salvar foto</button>
+                                <button type="submit" class="btn-primary" style="display:none">Salvar foto</button>
                             </form>
+                            <p class="muted">Clique na sua foto para alterar.</p>
                             <button id="profile-photo-remove" class="btn-ghost profile-photo-remove" type="button">
                                 Remover foto
                             </button>
@@ -291,65 +241,145 @@
         </div>
     </div>
 
-    <section id="reader-modal" class="reader-modal hidden" aria-hidden="true">
-        <div id="reader-modal-backdrop" class="reader-backdrop"></div>
-        <article class="reader-card">
-            <div class="reader-head">
+    <section id="writer-editor-modal" class="writer-editor-modal hidden" aria-hidden="true">
+        <div id="writer-editor-backdrop" class="writer-editor-backdrop"></div>
+        <article class="writer-editor-card">
+            <header class="writer-editor-head">
                 <div>
-                    <p id="reader-story-name" class="chip">Leitura</p>
-                    <h2 id="reader-chapter-title">Capítulo</h2>
-                    <p id="reader-meta" class="muted"></p>
+                    <p id="writer-editor-mode" class="chip">Livro</p>
+                    <h2 id="writer-editor-title">Novo livro</h2>
                 </div>
-                <button id="reader-close" class="reader-close-btn" type="button" aria-label="Fechar leitura">✕</button>
-            </div>
+                <button id="writer-editor-close" class="writer-editor-close" type="button" aria-label="Fechar editor">×</button>
+                </header>
+                
+                <div class="writer-editor-grid">
+                    <section class="writer-editor-section">
+                        <div class="section-head">
+                            <div>
+                                <h2>Capa e dados</h2>
+                                <p class="muted">Defina título, capa, gênero e sinopse do livro.</p>
+                            </div>
+                    </div>
+                    <form id="nova-historia-form" class="form-stack">
+                        <input id="historia-edit-id" type="hidden" name="historia_id" value="">
+                        <label>
+                            Título
+                            <input type="text" name="titulo" required placeholder="Título da história">
+                        </label>
+                        <label>
+                            Gênero
+                            <input type="text" name="genero" required placeholder="Romance, fantasia...">
+                        </label>
+                        <label>
+                            Capa da história
+                            <input id="story-cover-input" type="file" accept="image/png,image/jpeg,image/webp">
+                        </label>
+                        <label>
+                            Sinopse
+                            <textarea name="sinopse" required placeholder="Escreva uma sinopse envolvente"></textarea>
+                        </label>
+                        <button id="historia-submit" type="submit" class="btn-primary">Criar livro</button>
+                    </form>
+                    </section>
 
-            <div class="reader-layout">
-                <aside class="reader-side-panel">
-                    <div class="reader-top-controls">
-                        <button id="reader-highlight" class="reader-tool-btn" type="button">Destacar</button>
-                        <div class="reader-reading-time">
-                            <div class="time-display">
-                                <span id="reader-session-time" class="time-value">0:00</span>
-                                <span class="time-unit">sessão</span>
-                            </div>
-                            <div class="time-display">
-                                <span id="reader-page-time" class="time-value">0:00</span>
-                                <span class="time-unit">página</span>
-                            </div>
-                            <div class="time-display">
-                                <span id="reader-chapter-time" class="time-value">0:00</span>
-                                <span class="time-unit">capítulo</span>
-                            </div>
-                            <div class="time-display">
-                                <span id="reader-book-time" class="time-value">0:00</span>
-                                <span class="time-unit">livro</span>
-                            </div>
+                <section class="writer-editor-section">
+                    <div class="section-head">
+                        <div>
+                            <h3 id="capitulo-form-title">Capítulos</h3>
+                            <p id="capitulo-form-hint" class="muted">Crie o livro para adicionar capítulos.</p>
                         </div>
                     </div>
+                    <div id="writer-modal-chapters-list" class="writer-chapter-list"></div>
+                    <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
+                        <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
+                        <label>
+                            História
+                            <select id="capitulo-historia-id" name="historia_id" required></select>
+                        </label>
+                        <label>
+                            Título do capítulo
+                            <input type="text" name="titulo" required placeholder="Capítulo 1...">
+                        </label>
+                        <label>
+                            Conteúdo
+                            <textarea name="conteudo" required placeholder="Escreva o capítulo aqui"></textarea>
+                        </label>
+                        <button id="capitulo-submit" type="submit" class="btn-primary">Adicionar capítulo</button>
+                        <button id="capitulo-edit-cancel" type="button" class="btn-ghost hidden">Cancelar edição</button>
+                    </form>
+                    </section>
+                    </div>
+        </article>
+        </section>
+        
+        <section id="reader-modal" class="reader-modal hidden" aria-hidden="true">
+            <div id="reader-modal-backdrop" class="reader-backdrop"></div>
+            <article class="reader-card">
+                <div class="reader-head">
+                    <button id="reader-close" class="reader-store-back" type="button" aria-label="Voltar à loja">
+                        <span aria-hidden="true">‹</span>
+                    </button>
+                    <div class="reader-titlebar">
+                        <p id="reader-story-name" class="reader-story-name">Leitura</p>
+                        <h2 id="reader-book-title-top" class="reader-book-title-top"></h2>
+                    </div>
+                <div class="reader-head-actions" aria-label="Ferramentas de leitura">
+                    <button id="reader-show-toc" class="reader-icon-btn is-active" type="button" aria-label="Abrir sumário">☷</button>
+                    <button class="reader-icon-btn" type="button" aria-label="Pesquisar">⌕</button>
+                    <button id="reader-show-settings" class="reader-icon-btn reader-aa-btn" type="button"
+                        aria-label="Ajustar fonte">Aa</button>
+                </div>
+                </div>
+<div class="reader-layout">
+    <section class="reader-page-stage">
+        <button id="reader-page-prev" class="page-dot left" aria-label="Página anterior">‹</button>
+        <article id="reader-content" class="reader-content"></article>
+        <button id="reader-page-next" class="page-dot right" aria-label="Próxima página">›</button>
+        <div class="reader-progress-footer">
+            <input id="reader-progress-range" type="range" min="1" max="1" value="1" aria-label="Progresso da leitura">
+            <p id="reader-page-counter">Local 1 de 1 • 0%</p>
+                    </div>
+                </section>
+                
+                <aside id="reader-side-panel" class="reader-side-panel" data-panel="toc">
+                    <button id="reader-panel-close" class="reader-panel-close" type="button" aria-label="Fechar painel">×</button>
+                
+                    <section class="reader-panel-section reader-panel-toc">
+                        <h3>Tabela de conteúdos</h3>
+                        <select id="reader-chapter-select" aria-label="Selecionar capítulo"></select>
+                        <div id="reader-toc-list" class="reader-toc-list"></div>
+                    </section>
 
-                    <div class="reader-settings-container">
+                    <section class="reader-panel-section reader-panel-settings">
                         <div class="reader-settings">
                             <div class="reader-setting-group">
                                 <p class="reader-setting-title">Fonte</p>
                                 <div id="reader-font-options" class="reader-option-grid reader-font-grid">
                                     <button class="reader-option-card reader-font-card" data-reader-font="serif_classic" type="button" aria-pressed="false">
                                         <span class="reader-font-preview">Aa</span>
+                                        <strong>Bookerly</strong>
                                     </button>
                                     <button class="reader-option-card reader-font-card" data-reader-font="georgia" type="button" aria-pressed="false">
                                         <span class="reader-font-preview">Aa</span>
+                                        <strong>Ember</strong>
                                     </button>
                                     <button class="reader-option-card reader-font-card" data-reader-font="book" type="button" aria-pressed="false">
                                         <span class="reader-font-preview">Aa</span>
+                                        <strong>Clássica</strong>
                                     </button>
                                     <button class="reader-option-card reader-font-card" data-reader-font="sans_clean" type="button" aria-pressed="false">
                                         <span class="reader-font-preview">Aa</span>
+                                        <strong>OpenDyslexic</strong>
                                     </button>
                                 </div>
                             </div>
                             <div class="reader-setting-group">
-                                <label for="reader-font-size">Tamanho da letra</label>
-                                <input id="reader-font-size" type="range" min="16" max="30" step="1" value="19">
-                                <small id="reader-font-size-value" class="muted">19px</small>
+                                <div class="reader-font-size-row">
+                                    <span>A</span>
+                                    <input id="reader-font-size" type="range" min="16" max="30" step="1" value="24" aria-label="Tamanho da letra">
+                                    <strong>A</strong>
+                                </div>
+                                <small id="reader-font-size-value" class="muted">24px</small>
                             </div>
                             <div class="reader-setting-group">
                                 <p class="reader-setting-title">Fundo</p>
@@ -369,24 +399,12 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
+                    </section>
 
-                    <div class="reader-setting-group">
-                        <label for="reader-chapter-select">Capítulo</label>
-                        <select id="reader-chapter-select"></select>
-                    </div>
-
-                    <div class="reader-page-nav">
-                        <button id="reader-page-prev" class="btn-ghost" type="button">← Página</button>
-                        <span id="reader-page-counter" class="chip">Página 1 de 1</span>
-                        <button id="reader-page-next" class="btn-ghost" type="button">Página →</button>
-                    </div>
-
-                    <div class="reader-actions">
-                        <div class="reader-progress-actions">
-                            <button id="reader-mark" class="btn-primary" type="button">Salvar progresso</button>
-                            <button id="reader-finish" class="btn-ghost" type="button">Concluir história</button>
-                        </div>
+                    <div class="reader-top-controls">
+                        <button id="reader-highlight" class="reader-tool-btn" type="button">Destacar seleção</button>
+                        <p id="reader-meta" class="muted">Capítulo</p>
+                        <p id="reader-predicted" class="muted">Tempo previsto: <strong id="reader-predicted-value">0:00</strong></p>
                     </div>
 
                     <details class="reader-marks-block">
@@ -409,10 +427,6 @@
                         </form>
                     </details>
                 </aside>
-
-                <section class="reader-page-stage">
-                    <article id="reader-content" class="reader-content"></article>
-                </section>
             </div>
         </article>
     </section>

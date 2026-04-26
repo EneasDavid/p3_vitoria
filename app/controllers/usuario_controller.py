@@ -296,6 +296,7 @@ class UsuarioController:
             conta['autor_id'],
             leitor_id=conta['leitor_id'],
             incluir_capitulos=True,
+            incluir_conteudo_capitulos=True,
         )
 
     @staticmethod
@@ -308,6 +309,24 @@ class UsuarioController:
         conta = contexto['conta']
         from app.controllers.historia_controller import HistoriaController
         return HistoriaController.criar_historia(titulo, sinopse, genero, conta['autor_id'], capa=capa)
+
+    @staticmethod
+    def editar_historia_por_token(token: str, historia_id: str, titulo: str, sinopse: str, genero: str, capa: str | None = None) -> dict:
+        """Edita dados de uma história da própria conta."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+
+        conta = contexto['conta']
+        from app.controllers.historia_controller import historias_db, HistoriaController
+
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+        if not historia.autor or historia.autor.id_usuario != conta['autor_id']:
+            return {'sucesso': False, 'erro': 'Você só pode editar suas próprias histórias', 'codigo': 403}
+
+        return HistoriaController.editar_historia(historia_id, titulo, sinopse, genero, capa=capa)
 
     @staticmethod
     def adicionar_capitulo_por_token(token: str, historia_id: str, titulo: str, conteudo: str) -> dict:
@@ -326,6 +345,24 @@ class UsuarioController:
             return {'sucesso': False, 'erro': 'Você só pode editar suas próprias histórias', 'codigo': 403}
 
         return HistoriaController.adicionar_capitulo(historia_id, titulo, conteudo)
+
+    @staticmethod
+    def editar_capitulo_por_token(token: str, historia_id: str, capitulo_id: str, titulo: str, conteudo: str) -> dict:
+        """Edita capítulo em uma história da própria conta."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+
+        conta = contexto['conta']
+        from app.controllers.historia_controller import historias_db, HistoriaController
+
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+        if not historia.autor or historia.autor.id_usuario != conta['autor_id']:
+            return {'sucesso': False, 'erro': 'Você só pode editar suas próprias histórias', 'codigo': 403}
+
+        return HistoriaController.editar_capitulo(historia_id, capitulo_id, titulo, conteudo)
 
     @staticmethod
     def salvar_na_biblioteca(token: str, historia_id: str, categoria: str) -> dict:

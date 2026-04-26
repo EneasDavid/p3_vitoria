@@ -2,6 +2,7 @@
 Controllers para gerenciar histórias e experiências de leitura.
 """
 import uuid
+from datetime import datetime
 from app.models.historia import Historia
 from app.models.capitulo import Capitulo
 from app.models.avaliacao import Avaliacao, TipoAvaliacao
@@ -125,7 +126,12 @@ class HistoriaController:
         }
 
     @staticmethod
-    def serializar_historia(historia: Historia, incluir_capitulos: bool = False, leitor_id: str | None = None) -> dict:
+    def serializar_historia(
+        historia: Historia,
+        incluir_capitulos: bool = False,
+        leitor_id: str | None = None,
+        incluir_conteudo_capitulos: bool = False,
+    ) -> dict:
         """Converte uma história para JSON com dados voltados para leitura."""
         ultimo_capitulo = historia.obter_ultimo_capitulo()
         leitor = usuarios_db.get(leitor_id) if leitor_id else None
@@ -141,7 +147,7 @@ class HistoriaController:
             'autor': historia.autor.nome if historia.autor else None,
             'autor_id': historia.autor.id_usuario if historia.autor else None,
             'capitulos': [
-                HistoriaController.serializar_capitulo(capitulo, incluir_conteudo=False)
+                HistoriaController.serializar_capitulo(capitulo, incluir_conteudo=incluir_conteudo_capitulos)
                 for capitulo in historia.capitulos
             ] if incluir_capitulos else None,
             'capitulo_inicial_id': historia.capitulos[0].id if historia.capitulos else None,
@@ -200,6 +206,47 @@ class HistoriaController:
                 'id': historia.id,
                 'autor_id': autor.id_usuario,
                 'mensagem': f'História "{titulo}" criada com sucesso!'
+            }
+        except Exception as e:
+            return {'sucesso': False, 'erro': str(e), 'codigo': 500}
+
+    @staticmethod
+    def editar_historia(historia_id: str, titulo: str, sinopse: str, genero: str, capa: str | None = None) -> dict:
+        """Atualiza dados principais de uma história."""
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+
+        try:
+            titulo = HistoriaController._limpar_texto(titulo)
+            sinopse = HistoriaController._limpar_texto(sinopse)
+            genero = HistoriaController._limpar_texto(genero)
+
+            if not titulo:
+                return {'sucesso': False, 'erro': 'Título é obrigatório', 'codigo': 400}
+            if not sinopse:
+                return {'sucesso': False, 'erro': 'Sinopse é obrigatória', 'codigo': 400}
+            if not genero:
+                return {'sucesso': False, 'erro': 'Gênero é obrigatório', 'codigo': 400}
+
+            if capa is not None:
+                capa_ok, capa_normalizada, capa_erro = HistoriaController._validar_capa(capa)
+                if not capa_ok:
+                    return {'sucesso': False, 'erro': capa_erro or 'Capa inválida', 'codigo': 400}
+                historia.capa = capa_normalizada
+
+            historia.titulo = titulo
+            historia.sinopse = sinopse
+            historia.genero = genero
+            historia.data_atualizacao = datetime.now()
+            return {
+                'sucesso': True,
+                'historia': HistoriaController.serializar_historia(
+                    historia,
+                    incluir_capitulos=True,
+                    incluir_conteudo_capitulos=True,
+                ),
+                'mensagem': f'Livro "{titulo}" atualizado com sucesso!'
             }
         except Exception as e:
             return {'sucesso': False, 'erro': str(e), 'codigo': 500}
@@ -264,7 +311,12 @@ class HistoriaController:
         }
 
     @staticmethod
-    def listar_historias_por_autor(autor_id: str, leitor_id: str | None = None, incluir_capitulos: bool = True) -> dict:
+    def listar_historias_por_autor(
+        autor_id: str,
+        leitor_id: str | None = None,
+        incluir_capitulos: bool = True,
+        incluir_conteudo_capitulos: bool = False,
+    ) -> dict:
         """Lista as histórias publicadas por um autor específico."""
         autor_id = HistoriaController._limpar_texto(autor_id)
         autor = usuarios_db.get(autor_id)
@@ -287,6 +339,7 @@ class HistoriaController:
                     historia,
                     incluir_capitulos=incluir_capitulos,
                     leitor_id=leitor_id,
+                    incluir_conteudo_capitulos=incluir_conteudo_capitulos,
                 )
                 for historia in historias
             ],
@@ -331,6 +384,37 @@ class HistoriaController:
                 'sucesso': True,
                 'id': capitulo.id,
                 'mensagem': f'Capítulo "{titulo}" adicionado com sucesso!'
+            }
+        except Exception as e:
+            return {'sucesso': False, 'erro': str(e), 'codigo': 500}
+
+    @staticmethod
+    def editar_capitulo(historia_id: str, capitulo_id: str, titulo: str, conteudo: str) -> dict:
+        """Atualiza um capítulo existente."""
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+
+        capitulo = HistoriaController._buscar_capitulo(historia, capitulo_id)
+        if not capitulo:
+            return {'sucesso': False, 'erro': 'Capítulo não encontrado', 'codigo': 404}
+
+        try:
+            titulo = HistoriaController._limpar_texto(titulo)
+            conteudo = HistoriaController._limpar_texto(conteudo)
+
+            if not titulo:
+                return {'sucesso': False, 'erro': 'Título do capítulo é obrigatório', 'codigo': 400}
+            if not conteudo:
+                return {'sucesso': False, 'erro': 'Conteúdo do capítulo é obrigatório', 'codigo': 400}
+
+            capitulo.titulo = titulo
+            capitulo.conteudo = conteudo
+            historia.data_atualizacao = capitulo.data_atualizacao
+            return {
+                'sucesso': True,
+                'capitulo': HistoriaController.serializar_capitulo(capitulo, incluir_conteudo=True),
+                'mensagem': f'Capítulo "{titulo}" atualizado com sucesso!'
             }
         except Exception as e:
             return {'sucesso': False, 'erro': str(e), 'codigo': 500}

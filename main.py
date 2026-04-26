@@ -569,6 +569,21 @@ def me_autoria_publicar():
     return resposta_api(resultado, 201 if resultado['sucesso'] else 400)
 
 
+@app.route('/api/me/autoria/historias/<historia_id>', methods=['PUT'])
+@require_auth
+def me_autoria_editar_historia(historia_id):
+    dados = obter_json_requisicao()
+    resultado = UsuarioController.editar_historia_por_token(
+        g.auth_token,
+        historia_id,
+        dados.get('titulo'),
+        dados.get('sinopse'),
+        dados.get('genero'),
+        dados.get('capa') if 'capa' in dados else None,
+    )
+    return resposta_api(resultado, 200 if resultado['sucesso'] else 400)
+
+
 @app.route('/api/me/autoria/historias/<historia_id>/capitulos', methods=['POST'])
 @require_auth
 def me_autoria_capitulo(historia_id):
@@ -580,6 +595,20 @@ def me_autoria_capitulo(historia_id):
         dados.get('conteudo'),
     )
     return resposta_api(resultado, 201 if resultado['sucesso'] else 400)
+
+
+@app.route('/api/me/autoria/historias/<historia_id>/capitulos/<capitulo_id>', methods=['PUT'])
+@require_auth
+def me_autoria_editar_capitulo(historia_id, capitulo_id):
+    dados = obter_json_requisicao()
+    resultado = UsuarioController.editar_capitulo_por_token(
+        g.auth_token,
+        historia_id,
+        capitulo_id,
+        dados.get('titulo'),
+        dados.get('conteudo'),
+    )
+    return resposta_api(resultado, 200 if resultado['sucesso'] else 400)
 
 
 @app.route('/api/status', methods=['GET'])

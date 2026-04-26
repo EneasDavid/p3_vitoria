@@ -14,6 +14,8 @@ const state = {
     catalogo: [],
     catalogoFiltros: {generos_disponiveis: []},
     historiaDetalhe: null,
+    autoriaSelecionadaId: null,
+    capituloEditandoId: null,
     capituloAtivo: null,
     readerPagination: {
         pages: [],
@@ -25,11 +27,12 @@ const state = {
         startedAt: null,
         pageStartedAt: null,
         intervalId: null,
+        autoSaveIntervalId: null,
         unsentSeconds: 0,
     },
     readerPrefs: {
         fontFamily: 'serif_classic',
-        fontSize: 19,
+        fontSize: 24,
         bgColor: 'paper_yellow',
     },
     filtros: {
@@ -85,9 +88,23 @@ function cacheElements() {
 
     el.formNovaHistoria = document.getElementById('nova-historia-form');
     el.formNovoCapitulo = document.getElementById('novo-capitulo-form');
+    el.writerEditorModal = document.getElementById('writer-editor-modal');
+    el.writerEditorBackdrop = document.getElementById('writer-editor-backdrop');
+    el.writerEditorClose = document.getElementById('writer-editor-close');
+    el.writerEditorTitle = document.getElementById('writer-editor-title');
+    el.writerEditorMode = document.getElementById('writer-editor-mode');
+    el.historiaEditId = document.getElementById('historia-edit-id');
+    el.historiaSubmit = document.getElementById('historia-submit');
+    el.writerModalChaptersList = document.getElementById('writer-modal-chapters-list');
     el.storyCoverInput = document.getElementById('story-cover-input');
     el.capituloHistoriaId = document.getElementById('capitulo-historia-id');
+    el.capituloEditId = document.getElementById('capitulo-edit-id');
+    el.capituloFormTitle = document.getElementById('capitulo-form-title');
+    el.capituloFormHint = document.getElementById('capitulo-form-hint');
+    el.capituloSubmit = document.getElementById('capitulo-submit');
+    el.capituloEditCancel = document.getElementById('capitulo-edit-cancel');
     el.autoriaHistorias = document.getElementById('autoria-historias');
+    el.writerAddTopButton = document.querySelector('.writer-add-book-card');
 
     el.perfilNome = document.getElementById('perfil-nome');
     el.perfilEmail = document.getElementById('perfil-email');
@@ -100,6 +117,7 @@ function cacheElements() {
     el.voceAutoria = document.getElementById('voce-autoria');
 
     el.readerModal = document.getElementById('reader-modal');
+    el.readerCard = document.querySelector('.reader-card');
     el.readerBackdrop = document.getElementById('reader-modal-backdrop');
     el.readerClose = document.getElementById('reader-close');
     el.readerStoryName = document.getElementById('reader-story-name');
@@ -107,6 +125,16 @@ function cacheElements() {
     el.readerMeta = document.getElementById('reader-meta');
     el.readerContent = document.getElementById('reader-content');
     el.readerChapterSelect = document.getElementById('reader-chapter-select');
+    el.readerTocList = document.getElementById('reader-toc-list');
+    el.readerSidePanel = document.getElementById('reader-side-panel');
+    el.readerPanelClose = document.getElementById('reader-panel-close');
+    el.readerShowToc = document.getElementById('reader-show-toc');
+    el.readerShowSettings = document.getElementById('reader-show-settings');
+    el.readerProgressRange = document.getElementById('reader-progress-range');
+    el.readerSampleBanner = document.getElementById('reader-sample-banner');
+    el.readerSampleClose = document.getElementById('reader-sample-close');
+    el.readerPredictedValue = document.getElementById('reader-predicted-value');
+    el.readerBookTitleTop = document.getElementById('reader-book-title-top');
     el.readerPagePrev = document.getElementById('reader-page-prev');
     el.readerPageNext = document.getElementById('reader-page-next');
     el.readerPageCounter = document.getElementById('reader-page-counter');
@@ -131,6 +159,26 @@ function cacheElements() {
 
 function bindGlobalEvents() {
     el.logout?.addEventListener('click', encerrarSessao);
+
+    // Clique no avatar abre seletor de arquivo para foto de perfil
+    el.profileAvatar?.addEventListener('click', () => {
+        if (el.profilePhotoInput) {
+            el.profilePhotoInput.click();
+        }
+    });
+
+    // Envio automático ao selecionar arquivo
+    el.profilePhotoInput?.addEventListener('change', () => {
+        if (el.profilePhotoForm) {
+            el.profilePhotoForm.dispatchEvent(new Event('submit', {cancelable: true}));
+        }
+    });
+
+    // Topbar: abrir editor de escrita com estilo de `btn-primary`
+    el.writerAddTopButton?.addEventListener('click', (e) => {
+        e.preventDefault();
+        abrirEditorAutoria();
+    });
 
     el.globalSearch?.addEventListener('input', (event) => {
         state.filtros.q = event.target.value.trim();
@@ -194,15 +242,44 @@ function bindGlobalEvents() {
 
     el.formNovaHistoria?.addEventListener('submit', publicarHistoria);
     el.formNovoCapitulo?.addEventListener('submit', publicarCapitulo);
+    el.writerEditorBackdrop?.addEventListener('click', fecharEditorAutoria);
+    el.writerEditorClose?.addEventListener('click', fecharEditorAutoria);
+    el.capituloEditCancel?.addEventListener('click', () => {
+        limparEdicaoCapitulo(true);
+    });
+    el.capituloHistoriaId?.addEventListener('change', (event) => {
+        abrirEditorAutoria(event.target.value);
+        renderEscrever();
+    });
     el.profilePhotoForm?.addEventListener('submit', enviarFotoPerfil);
     el.profilePhotoRemove?.addEventListener('click', removerFotoPerfil);
 
     el.readerBackdrop?.addEventListener('click', fecharLeitor);
     el.readerClose?.addEventListener('click', fecharLeitor);
-    el.readerMark?.addEventListener('click', salvarProgressoLeitura);
-    el.readerFinish?.addEventListener('click', () => salvarProgressoLeitura(100));
     el.readerPagePrev?.addEventListener('click', navegarPaginaAnterior);
     el.readerPageNext?.addEventListener('click', navegarProximaPagina);
+    el.readerShowToc?.addEventListener('click', () => alternarPainelLeitor('toc'));
+    el.readerShowSettings?.addEventListener('click', () => alternarPainelLeitor('settings'));
+    el.readerPanelClose?.addEventListener('click', () => {
+        el.readerSidePanel?.classList.toggle('is-collapsed');
+    });
+    el.readerSampleClose?.addEventListener('click', () => {
+        el.readerSampleBanner?.classList.add('hidden');
+    });
+    el.readerTocList?.addEventListener('click', async (event) => {
+        const button = event.target.closest('[data-reader-chapter-id]');
+        const storyId = state.capituloAtivo?.historia?.id;
+        const chapterId = button?.dataset.readerChapterId;
+        if (storyId && chapterId && chapterId !== state.capituloAtivo?.capitulo?.id) {
+            await abrirCapitulo(storyId, chapterId);
+        }
+    });
+    el.readerProgressRange?.addEventListener('change', async (event) => {
+        await registrarTempoLeituraAtual();
+        const alvo = Number(event.target.value || 1) - 1;
+        state.readerPagination.currentPage = Math.max(0, Math.min((state.readerPagination.pages.length || 1) - 1, alvo));
+        renderPaginaAtualLeitura();
+    });
     el.readerChapterSelect?.addEventListener('change', async (event) => {
         const chapterId = event.target.value;
         const storyId = state.capituloAtivo?.historia?.id;
@@ -227,6 +304,21 @@ async function garantirSessao() {
     }
 
     try {
+        if (action === 'comentar-marcacao') {
+            const marcacaoId = button.dataset.marcacaoId;
+            const texto = prompt('Escreva um comentário sobre essa marcação:');
+            if (!texto) {
+                return;
+            }
+            const response = await api('/me/marcacoes/comentar', {
+                method: 'POST',
+                body: {marcacao_id: marcacaoId, conteudo: texto},
+            });
+            showToast(response.mensagem || 'Comentário adicionado.');
+            await carregarPainel();
+            renderVoce();
+            return;
+        }
         const response = await api('/auth/me');
         state.user = response.usuario;
         atualizarIdentidadeUI();
@@ -542,7 +634,6 @@ function renderBiblioteca() {
     el.sumLendo.textContent = String(state.biblioteca.lendo || 0);
     el.sumFavoritos.textContent = String(state.biblioteca.favoritos || 0);
     el.sumConcluidos.textContent = String(state.biblioteca.concluidos || 0);
-
     const categorias = state.biblioteca.categorias || {};
     const ordem = ['Lendo', 'Favoritos', 'Pausados', 'Concluídos'];
     el.bibliotecaCategorias.innerHTML = ordem.map((nome) => {
@@ -554,15 +645,23 @@ function renderBiblioteca() {
                     <span class="chip">${historias.length}</span>
                 </div>
                 <div class="stack-list">
-                    ${historias.length ? historias.map((story) => `
+                    ${historias.length ? historias.map((story) => {
+                        const tempoTotal = story?.tempo_leitura?.total_segundos || 0;
+                        const palavras = story?.total_palavras || 0;
+                        const palavrasPorPagina = calcularPalavrasPorPagina();
+                        const paginasEstimadas = Math.max(1, Math.ceil(palavras / Math.max(1, palavrasPorPagina)));
+                        const tempoPorPagina = paginasEstimadas ? Math.round((tempoTotal || 0) / paginasEstimadas) : 0;
+                        return `
                         <button class="list-button" data-action="abrir-historia" data-story-id="${story.id}" type="button">
+                            <div class="mini-cover">${renderStoryCover(story)}</div>
                             <div>
                                 <strong>${escapeHtml(story.titulo)}</strong>
                                 <p class="muted">${escapeHtml(story.autor || 'Autor')}</p>
+                                ${tempoTotal ? `<p class="muted">Tempo gasto: ${formatarTempo(tempoTotal)} · ${tempoPorPagina ? `~${formatarTempo(tempoPorPagina)}/página` : ''}</p>` : ''}
                             </div>
                             <span>Ver</span>
-                        </button>
-                    `).join('') : `<p class="placeholder">Sem histórias nesta categoria.</p>`}
+                        </button>`;
+                    }).join('') : `<p class="placeholder">Sem histórias nesta categoria.</p>`}
                 </div>
             </section>
         `;
@@ -570,16 +669,25 @@ function renderBiblioteca() {
 
     const progresso = state.painel?.leitura?.progresso || [];
     el.bibliotecaProgresso.innerHTML = progresso.length
-        ? progresso.map((item) => `
+        ? progresso.map((item) => {
+            const tempoTotal = item.historia?.tempo_leitura?.total_segundos || item.tempo_segundos || 0;
+            const palavras = item.historia?.total_palavras || 0;
+            const palavrasPorPagina = calcularPalavrasPorPagina();
+            const paginasEstimadas = Math.max(1, Math.ceil(palavras / Math.max(1, palavrasPorPagina)));
+            const tempoPorPagina = paginasEstimadas ? Math.round((tempoTotal || 0) / paginasEstimadas) : 0;
+            return `
             <article class="compact-story">
                 <div>
+                    <div class="mini-cover">${renderStoryCover(item.historia)}</div>
                     <strong>${escapeHtml(item.historia.titulo)}</strong>
                     <p class="muted">${escapeHtml(item.capitulo_titulo || 'Capítulo inicial')}</p>
                     <div class="progress"><span style="width:${item.percentual}%"></span></div>
+                    ${tempoTotal ? `<p class="muted">Tempo gasto: ${formatarTempo(tempoTotal)} · ${tempoPorPagina ? `~${formatarTempo(tempoPorPagina)}/página` : ''}</p>` : ''}
                 </div>
                 <button class="btn-ghost" data-action="abrir-capitulo" data-story-id="${item.historia.id}" data-chapter-id="${item.capitulo_id || item.historia.capitulo_inicial_id || ''}" type="button">Continuar</button>
             </article>
-        `).join('')
+        `;
+        }).join('')
         : `<p class="placeholder">Você ainda não tem leituras em andamento.</p>`;
 }
 
@@ -587,29 +695,209 @@ function renderEscrever() {
     if (!el.autoriaHistorias) {
         return;
     }
-    el.autoriaHistorias.innerHTML = state.minhasHistorias.length
-        ? state.minhasHistorias.map((story) => `
-            <article class="story-row writer-library-item">
-                <div>
-                    <strong>${escapeHtml(story.titulo)}</strong>
-                    <p class="muted">${escapeHtml(story.sinopse)}</p>
-                    <p class="meta-line">${story.total_capitulos} capítulos · ${escapeHtml(story.genero || 'Geral')}</p>
-                    <p class="muted">${(story.capitulos || []).map((chapter) => `${chapter.ordem}. ${chapter.titulo}`).join(' · ')}</p>
-                </div>
-                <div class="inline-actions writer-library-actions">
-                    <button class="btn-primary" data-action="selecionar-escrita" data-story-id="${story.id}" type="button">Adicionar capítulo</button>
-                    <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Ver</button>
-                </div>
-            </article>
-        `).join('')
-        : `<p class="placeholder">Sua biblioteca de criação está vazia. Crie a capa da primeira história ao lado.</p>`;
+    const historias = state.minhasHistorias || [];
+    const livros = historias.map((story) => `
+        <article class="writer-book-card ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}">
+            <button class="writer-book-cover" data-action="selecionar-escrita" data-story-id="${escapeAttribute(story.id)}" type="button" aria-label="Editar ${escapeAttribute(story.titulo)}">
+                ${renderStoryCover(story)}
+            </button>
+            <div class="writer-book-info">
+                <strong>${escapeHtml(story.titulo)}</strong>
+                <span>${story.total_capitulos} capítulos · ${escapeHtml(story.genero || 'Geral')}</span>
+            </div>
+        </article>
+    `).join('');
+
+    el.autoriaHistorias.innerHTML = `
+        <button class="writer-add-book-card" data-action="nova-historia" type="button" aria-label="Adicionar novo livro">
+            <span>+</span>
+            <strong>Novo livro</strong>
+        </button>
+        ${livros || `<p class="placeholder writer-empty-state">Sua biblioteca de criação está vazia.</p>`}
+    `;
 
     if (el.capituloHistoriaId) {
-        el.capituloHistoriaId.innerHTML = state.minhasHistorias.length
-            ? state.minhasHistorias.map((story) => `<option value="${story.id}">${escapeHtml(story.titulo)}</option>`).join('')
+        el.capituloHistoriaId.innerHTML = historias.length
+            ? historias.map((story) => `<option value="${escapeAttribute(story.id)}">${escapeHtml(story.titulo)}</option>`).join('')
             : `<option value="">Nenhuma história publicada</option>`;
-        el.capituloHistoriaId.disabled = !state.minhasHistorias.length;
     }
+    sincronizarFormularioCapituloAutoria();
+}
+
+function renderPainelCapitulosAutoria(story) {
+    const capitulos = story.capitulos || [];
+    if (!el.writerModalChaptersList) {
+        return;
+    }
+    el.writerModalChaptersList.innerHTML = `
+        <div class="writer-chapter-list-head">
+            <strong>${capitulos.length} capítulos</strong>
+            <button class="btn-primary" data-action="novo-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" type="button">+ Capítulo</button>
+        </div>
+        ${capitulos.length ? capitulos.map((chapter) => `
+            <article class="writer-chapter-item">
+                <div>
+                    <strong>${chapter.ordem}. ${escapeHtml(chapter.titulo)}</strong>
+                    <p class="muted">${chapter.total_palavras || 0} palavras</p>
+                </div>
+                <button class="btn-ghost" data-action="editar-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" data-chapter-id="${escapeAttribute(chapter.id)}" type="button">Editar</button>
+            </article>
+        `).join('') : `<p class="placeholder">Este livro ainda não tem capítulos.</p>`}
+    `;
+}
+
+function obterHistoriaAutoriaSelecionada() {
+    const historias = state.minhasHistorias || [];
+    if (!historias.length) {
+        state.autoriaSelecionadaId = null;
+        return null;
+    }
+    const selecionada = historias.find((story) => story.id === state.autoriaSelecionadaId);
+    return selecionada || null;
+}
+
+function abrirEditorAutoria(storyId = null) {
+    state.autoriaSelecionadaId = storyId || null;
+    state.capituloEditandoId = null;
+    const historia = obterHistoriaAutoriaSelecionada();
+
+    if (el.formNovaHistoria) {
+        el.formNovaHistoria.reset();
+    }
+    if (el.formNovoCapitulo) {
+        el.formNovoCapitulo.reset();
+    }
+    if (el.storyCoverInput) {
+        el.storyCoverInput.value = '';
+    }
+    if (el.historiaEditId) {
+        el.historiaEditId.value = historia?.id || '';
+    }
+
+    if (historia && el.formNovaHistoria) {
+        el.formNovaHistoria.elements.titulo.value = historia.titulo || '';
+        el.formNovaHistoria.elements.genero.value = historia.genero || '';
+        el.formNovaHistoria.elements.sinopse.value = historia.sinopse || '';
+    }
+
+    if (el.writerEditorTitle) {
+        el.writerEditorTitle.textContent = historia ? historia.titulo : 'Novo livro';
+    }
+    if (el.writerEditorMode) {
+        el.writerEditorMode.textContent = historia ? 'Editar livro' : 'Criar livro';
+    }
+    if (el.historiaSubmit) {
+        el.historiaSubmit.textContent = historia ? 'Salvar dados do livro' : 'Criar livro';
+    }
+
+    if (historia) {
+        renderPainelCapitulosAutoria(historia);
+        prepararNovoCapitulo(historia.id, false);
+    } else {
+        renderPainelCapitulosAutoriaVazio();
+        sincronizarFormularioCapituloAutoria();
+    }
+
+    el.writerEditorModal?.classList.remove('hidden');
+    el.writerEditorModal?.setAttribute('aria-hidden', 'false');
+    el.formNovaHistoria?.elements?.titulo?.focus();
+    renderEscrever();
+}
+
+function fecharEditorAutoria() {
+    el.writerEditorModal?.classList.add('hidden');
+    el.writerEditorModal?.setAttribute('aria-hidden', 'true');
+    state.capituloEditandoId = null;
+    renderEscrever();
+}
+
+function renderPainelCapitulosAutoriaVazio() {
+    if (el.writerModalChaptersList) {
+        el.writerModalChaptersList.innerHTML = `<p class="placeholder">Crie o livro para liberar capítulos.</p>`;
+    }
+}
+
+function sincronizarFormularioCapituloAutoria() {
+    const historia = obterHistoriaAutoriaSelecionada();
+    const editando = Boolean(state.capituloEditandoId);
+    const tituloInput = el.formNovoCapitulo?.elements?.titulo;
+    const conteudoInput = el.formNovoCapitulo?.elements?.conteudo;
+
+    if (el.capituloHistoriaId) {
+        el.capituloHistoriaId.disabled = !historia;
+        if (historia) {
+            el.capituloHistoriaId.value = historia.id;
+        }
+    }
+    if (el.capituloEditId) {
+        el.capituloEditId.value = state.capituloEditandoId || '';
+    }
+    if (el.capituloFormTitle) {
+        el.capituloFormTitle.textContent = historia
+            ? (editando ? 'Editar capítulo' : `Capítulos de ${historia.titulo}`)
+            : 'Capítulos';
+    }
+    if (el.capituloFormHint) {
+        el.capituloFormHint.textContent = historia
+            ? (editando ? 'Altere o título ou conteúdo e salve.' : 'Adicione um capítulo novo ou escolha um existente para editar.')
+            : 'Escolha uma capa da sua biblioteca para adicionar ou editar capítulos.';
+    }
+    if (el.capituloSubmit) {
+        el.capituloSubmit.textContent = editando ? 'Salvar capítulo' : 'Adicionar capítulo';
+        el.capituloSubmit.disabled = !historia;
+    }
+    if (el.capituloEditCancel) {
+        el.capituloEditCancel.classList.toggle('hidden', !editando);
+    }
+    if (tituloInput) {
+        tituloInput.disabled = !historia;
+    }
+    if (conteudoInput) {
+        conteudoInput.disabled = !historia;
+    }
+}
+
+function prepararNovoCapitulo(storyId, rolar = false) {
+    state.autoriaSelecionadaId = storyId;
+    state.capituloEditandoId = null;
+    if (el.formNovoCapitulo) {
+        el.formNovoCapitulo.reset();
+    }
+    if (el.capituloEditId) {
+        el.capituloEditId.value = '';
+    }
+    if (el.capituloHistoriaId) {
+        el.capituloHistoriaId.value = storyId;
+    }
+    sincronizarFormularioCapituloAutoria();
+    if (rolar) {
+        el.formNovoCapitulo?.scrollIntoView({behavior: 'smooth', block: 'center'});
+        el.formNovoCapitulo?.elements?.titulo?.focus();
+    }
+}
+
+function preencherEdicaoCapitulo(storyId, chapterId) {
+    const historia = (state.minhasHistorias || []).find((story) => story.id === storyId);
+    const capitulo = historia?.capitulos?.find((chapter) => chapter.id === chapterId);
+    if (!historia || !capitulo || !el.formNovoCapitulo) {
+        showToast('Não foi possível carregar o capítulo para edição.', true);
+        return;
+    }
+
+    state.autoriaSelecionadaId = storyId;
+    state.capituloEditandoId = chapterId;
+    el.formNovoCapitulo.elements.historia_id.value = storyId;
+    el.formNovoCapitulo.elements.capitulo_id.value = chapterId;
+    el.formNovoCapitulo.elements.titulo.value = capitulo.titulo || '';
+    el.formNovoCapitulo.elements.conteudo.value = capitulo.conteudo || '';
+    sincronizarFormularioCapituloAutoria();
+    el.formNovoCapitulo.scrollIntoView({behavior: 'smooth', block: 'center'});
+    el.formNovoCapitulo.elements.titulo.focus();
+}
+
+function limparEdicaoCapitulo(rolar = false) {
+    const storyId = state.autoriaSelecionadaId || el.capituloHistoriaId?.value || '';
+    prepararNovoCapitulo(storyId, rolar);
 }
 
 function renderVoce() {
@@ -631,12 +919,24 @@ function renderVoce() {
             </div>
             <div class="profile-quotes">
                 <h4>Citações marcadas</h4>
-                ${marcacoes.length ? marcacoes.slice(0, 5).map((item) => `
-                    <article class="profile-quote">
-                        <p>“${escapeHtml(item.trecho)}”</p>
-                        <span>${escapeHtml(item.historia_titulo)} · ${escapeHtml(item.capitulo_titulo)}</span>
-                    </article>
-                `).join('') : `<p class="placeholder">As partes que você marcar aparecerão aqui.</p>`}
+                ${marcacoes.length ? marcacoes.slice(0, 6).map((item) => {
+                    const capa = item.historia_capa || item.capa || item.historia?.capa || '';
+                    const data = item.data || item.data_marcacao || '';
+                    return `
+                    <article class="mark-feed-item">
+                        <div class="mark-thumb">${capa ? `<img src="${escapeAttribute(capa)}" alt="capa"/>` : `<div class="cover cover-placeholder small"></div>`}</div>
+                        <div>
+                            <div class="mark-head">
+                                <strong>${escapeHtml(item.usuario || 'Você')}</strong>
+                                <small class="muted">${escapeHtml(data)}</small>
+                            </div>
+                            <p>“${escapeHtml(item.trecho)}”</p>
+                            <div class="inline-actions">
+                                <button class="btn-ghost" data-action="comentar-marcacao" data-marcacao-id="${escapeAttribute(item.id || '')}" type="button">Comentar</button>
+                            </div>
+                        </div>
+                    </article>`;
+                }).join('') : `<p class="placeholder">As partes que você marcar aparecerão aqui.</p>`}
             </div>
         `;
     }
@@ -736,6 +1036,11 @@ async function handleStoryActionClick(event) {
             return;
         }
 
+        if (action === 'nova-historia') {
+            abrirEditorAutoria();
+            return;
+        }
+
         if (action === 'abrir-historia') {
             window.location.href = `/app/historias?story=${encodeURIComponent(storyId)}`;
             return;
@@ -751,11 +1056,19 @@ async function handleStoryActionClick(event) {
         }
 
         if (action === 'selecionar-escrita') {
-            if (el.capituloHistoriaId) {
-                el.capituloHistoriaId.value = storyId;
-                el.capituloHistoriaId.scrollIntoView({behavior: 'smooth', block: 'center'});
-            }
-            showToast('História selecionada. Agora adicione um capítulo.');
+            abrirEditorAutoria(storyId);
+            return;
+        }
+
+        if (action === 'novo-capitulo-autoria') {
+            prepararNovoCapitulo(storyId, true);
+            showToast('Pronto para adicionar um novo capítulo.');
+            return;
+        }
+
+        if (action === 'editar-capitulo-autoria') {
+            state.autoriaSelecionadaId = storyId;
+            preencherEdicaoCapitulo(storyId, button.dataset.chapterId);
             return;
         }
 
@@ -794,6 +1107,7 @@ async function publicarHistoria(event) {
     event.preventDefault();
     const payload = Object.fromEntries(new FormData(el.formNovaHistoria).entries());
     try {
+        const editando = Boolean(payload.historia_id);
         const coverFile = el.storyCoverInput?.files?.[0];
         if (coverFile) {
             const tiposPermitidos = new Set(['image/png', 'image/jpeg', 'image/webp']);
@@ -808,19 +1122,20 @@ async function publicarHistoria(event) {
             payload.capa = await lerArquivoComoDataURL(coverFile);
         }
 
-        const response = await api('/me/autoria/historias', {method: 'POST', body: payload});
-        showToast(response.mensagem || 'História publicada com sucesso.');
+        const endpoint = editando
+            ? `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}`
+            : '/me/autoria/historias';
+        const response = await api(endpoint, {method: editando ? 'PUT' : 'POST', body: payload});
+        showToast(response.mensagem || (editando ? 'Livro atualizado com sucesso.' : 'História publicada com sucesso.'));
         el.formNovaHistoria.reset();
         if (el.storyCoverInput) {
             el.storyCoverInput.value = '';
         }
         await carregarAutoria();
+        state.autoriaSelecionadaId = response.historia?.id || response.id || payload.historia_id || null;
+        state.capituloEditandoId = null;
         renderEscrever();
-        if (response.historia?.id && el.capituloHistoriaId) {
-            el.capituloHistoriaId.value = response.historia.id;
-        } else if (response.id && el.capituloHistoriaId) {
-            el.capituloHistoriaId.value = response.id;
-        }
+        abrirEditorAutoria(state.autoriaSelecionadaId);
     } catch (error) {
         handleError(error);
     }
@@ -834,17 +1149,24 @@ async function publicarCapitulo(event) {
         return;
     }
     try {
-        const response = await api(`/me/autoria/historias/${encodeURIComponent(payload.historia_id)}/capitulos`, {
-            method: 'POST',
+        const editando = Boolean(payload.capitulo_id);
+        const endpoint = editando
+            ? `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}/capitulos/${encodeURIComponent(payload.capitulo_id)}`
+            : `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}/capitulos`;
+        const response = await api(endpoint, {
+            method: editando ? 'PUT' : 'POST',
             body: {
                 titulo: payload.titulo,
                 conteudo: payload.conteudo,
             },
         });
-        showToast(response.mensagem || 'Capítulo adicionado com sucesso.');
+        showToast(response.mensagem || (editando ? 'Capítulo atualizado com sucesso.' : 'Capítulo adicionado com sucesso.'));
+        state.autoriaSelecionadaId = payload.historia_id;
+        state.capituloEditandoId = null;
         el.formNovoCapitulo.reset();
         await carregarAutoria();
         renderEscrever();
+        abrirEditorAutoria(state.autoriaSelecionadaId);
     } catch (error) {
         handleError(error);
     }
@@ -902,47 +1224,76 @@ function renderModalLeitura(paginaInicial = 'manter') {
         return;
     }
     const {historia, capitulo} = state.capituloAtivo;
-    el.readerStoryName.textContent = `${historia.titulo} · ${historia.autor || 'Autor'}`;
-    el.readerChapterTitle.textContent = capitulo.titulo;
-    el.readerMeta.textContent = `Capítulo ${capitulo.ordem}`;
+    if (el.readerStoryName) {
+        el.readerStoryName.textContent = `${historia.titulo} · ${historia.autor || 'Autor'}`;
+    }
+    if (el.readerBookTitleTop) {
+        el.readerBookTitleTop.textContent = historia.titulo || '';
+    }
+    if (el.readerChapterTitle) {
+        el.readerChapterTitle.textContent = capitulo.titulo;
+    }
+    if (el.readerMeta) {
+        el.readerMeta.textContent = `Capítulo ${capitulo.ordem}: ${capitulo.titulo}`;
+    }
+    el.readerSampleBanner?.classList.remove('hidden');
     renderReaderChapterSelect();
     sincronizarControlesLeitor();
     aplicarPaginacaoCapitulo(paginaInicial);
-    el.readerCommentsCount.textContent = String((capitulo.comentarios_recentes || []).length);
-    el.readerComments.innerHTML = (capitulo.comentarios_recentes || []).length
-        ? capitulo.comentarios_recentes.map((comment) => `
-            <article class="comment-item">
-                <strong style="color:${escapeAttribute(corNomeUsuario(comment.usuario))};">${escapeHtml(comment.usuario)}</strong>
-                <p class="muted">${escapeHtml(comment.conteudo)}</p>
-                ${comment.usuario_id === state.user?.leitor_id ? `
-                    <div class="inline-actions">
-                        <button class="btn-ghost" data-action="edit-comment" data-comment-id="${comment.id}" type="button">Editar</button>
-                        <button class="btn-ghost" data-action="delete-comment" data-comment-id="${comment.id}" type="button">Excluir</button>
-                    </div>
-                ` : ''}
-            </article>
-        `).join('')
-        : `<p class="placeholder">Seja o primeiro comentário neste capítulo.</p>`;
+    if (el.readerCommentsCount) {
+        el.readerCommentsCount.textContent = String((capitulo.comentarios_recentes || []).length);
+    }
+    if (el.readerComments) {
+        el.readerComments.innerHTML = (capitulo.comentarios_recentes || []).length
+            ? capitulo.comentarios_recentes.map((comment) => `
+                <article class="comment-item">
+                    <strong style="color:${escapeAttribute(corNomeUsuario(comment.usuario))};">${escapeHtml(comment.usuario)}</strong>
+                    <p class="muted">${escapeHtml(comment.conteudo)}</p>
+                    ${comment.usuario_id === state.user?.leitor_id ? `
+                        <div class="inline-actions">
+                            <button class="btn-ghost" data-action="edit-comment" data-comment-id="${comment.id}" type="button">Editar</button>
+                            <button class="btn-ghost" data-action="delete-comment" data-comment-id="${comment.id}" type="button">Excluir</button>
+                        </div>
+                    ` : ''}
+                </article>
+            `).join('')
+            : `<p class="placeholder">Seja o primeiro comentário neste capítulo.</p>`;
+    }
 
     renderMarcacoesLeitor();
     atualizarTempoLeituraUI();
 }
 
 function renderReaderChapterSelect() {
-    if (!el.readerChapterSelect || !state.capituloAtivo) {
+    if (!state.capituloAtivo) {
         return;
     }
 
     const capitulos = state.capituloAtivo.historia?.capitulos || [];
     const capituloAtualId = state.capituloAtivo.capitulo?.id;
-    el.readerChapterSelect.innerHTML = capitulos.length
-        ? capitulos.map((chapter) => `
-            <option value="${escapeAttribute(chapter.id)}" ${chapter.id === capituloAtualId ? 'selected' : ''}>
-                ${chapter.ordem}. ${escapeHtml(chapter.titulo)}
-            </option>
-        `).join('')
-        : `<option value="">Sem capítulos</option>`;
-    el.readerChapterSelect.disabled = !capitulos.length;
+    if (el.readerChapterSelect) {
+        el.readerChapterSelect.innerHTML = capitulos.length
+            ? capitulos.map((chapter) => `
+                <option value="${escapeAttribute(chapter.id)}" ${chapter.id === capituloAtualId ? 'selected' : ''}>
+                    ${chapter.ordem}. ${escapeHtml(chapter.titulo)}
+                </option>
+            `).join('')
+            : `<option value="">Sem capítulos</option>`;
+        el.readerChapterSelect.disabled = !capitulos.length;
+    }
+    if (el.readerTocList) {
+        el.readerTocList.innerHTML = '';
+    }
+}
+
+function alternarPainelLeitor(panel) {
+    if (!el.readerSidePanel || !['toc', 'settings'].includes(panel)) {
+        return;
+    }
+    el.readerSidePanel.dataset.panel = panel;
+    el.readerSidePanel.classList.remove('is-collapsed');
+    el.readerShowToc?.classList.toggle('is-active', panel === 'toc');
+    el.readerShowSettings?.classList.toggle('is-active', panel === 'settings');
 }
 
 function aplicarPaginacaoCapitulo(paginaInicial = 'manter') {
@@ -1139,19 +1490,34 @@ function renderPaginaAtualLeitura() {
     const destaquesDaPagina = obterDestaquesDaPagina(paginaAtual);
     aplicarPreferenciasVisuaisLeitor();
 
+    const metade = Math.ceil(blocos.length / 2);
+    const blocosEsquerda = blocos.slice(0, metade);
+    const blocosDireita = blocos.slice(metade);
+    const renderBlocos = (items, incluirTitulo = false) => `
+        <article class="reader-page">
+            ${incluirTitulo ? `<h3>${escapeHtml(state.capituloAtivo?.capitulo?.titulo || 'Capítulo')}</h3>` : ''}
+            ${items.length
+                ? items.map((paragrafo) => `<p>${renderTextoComDestaques(paragrafo, destaquesDaPagina)}</p>`).join('')
+                : (indice === 0 && incluirTitulo ? '<p>Este capítulo ainda não possui conteúdo.</p>' : '')}
+        </article>
+    `;
+
     el.readerContent.innerHTML = `
         <div class="reader-pages">
-            <article class="reader-page">
-                ${blocos.length
-                    ? blocos.map((paragrafo) => `<p>${renderTextoComDestaques(paragrafo, destaquesDaPagina)}</p>`).join('')
-                    : '<p>Este capítulo ainda não possui conteúdo.</p>'}
-                <footer class="reader-page-index">Página ${contadorLivro.paginaAtual}</footer>
-            </article>
+            <div class="reader-spread">
+                ${renderBlocos(blocosEsquerda, indice === 0)}
+                ${renderBlocos(blocosDireita)}
+            </div>
         </div>
     `;
 
     if (el.readerPageCounter) {
-        el.readerPageCounter.textContent = `Página ${contadorLivro.paginaAtual} de ${contadorLivro.totalPaginas}`;
+        const percentual = Math.max(1, Math.round((contadorLivro.paginaAtual / contadorLivro.totalPaginas) * 100));
+        el.readerPageCounter.textContent = `Local ${contadorLivro.paginaAtual} de ${contadorLivro.totalPaginas} • ${percentual}%`;
+    }
+    if (el.readerProgressRange) {
+        el.readerProgressRange.max = String(total);
+        el.readerProgressRange.value = String(indice + 1);
     }
     if (el.readerPagePrev) {
         el.readerPagePrev.disabled = !hasGlobalPrev;
@@ -1301,6 +1667,9 @@ function aplicarPreferenciasVisuaisLeitor() {
     el.readerContent.dataset.font = state.readerPrefs.fontFamily;
     el.readerContent.dataset.bg = state.readerPrefs.bgColor;
     el.readerContent.style.setProperty('--reader-font-size', `${state.readerPrefs.fontSize}px`);
+    if (el.readerCard) {
+        el.readerCard.dataset.bg = state.readerPrefs.bgColor;
+    }
 }
 
 function iniciarSessaoLeitura() {
@@ -1311,6 +1680,11 @@ function iniciarSessaoLeitura() {
     state.readerSession.pageStartedAt = agora;
     if (!state.readerSession.intervalId) {
         state.readerSession.intervalId = window.setInterval(atualizarTempoLeituraUI, 1000);
+    }
+    if (!state.readerSession.autoSaveIntervalId) {
+        state.readerSession.autoSaveIntervalId = window.setInterval(() => {
+            salvarProgressoLeitura().catch(() => {});
+        }, 15000);
     }
     atualizarTempoLeituraUI();
 }
@@ -1455,10 +1829,14 @@ async function fecharLeitor() {
     if (state.readerSession.intervalId) {
         window.clearInterval(state.readerSession.intervalId);
     }
+    if (state.readerSession.autoSaveIntervalId) {
+        window.clearInterval(state.readerSession.autoSaveIntervalId);
+    }
     state.readerSession = {
         startedAt: null,
         pageStartedAt: null,
         intervalId: null,
+        autoSaveIntervalId: null,
         unsentSeconds: 0,
     };
     el.readerModal?.classList.add('hidden');
