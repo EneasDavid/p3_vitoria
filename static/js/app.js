@@ -535,11 +535,12 @@ function renderInicioEmAlta() {
     if (!el.inicioEmAlta) {
         return;
     }
-    // Mostrar até 8 livros: primeiro itens de "continuar lendo", depois livros dos gêneros curtidos
+    // Algoritmo de recomendação com pesos por gênero e probabilidades
     const maxItems = 8;
     const included = new Set();
     const output = [];
 
+    // 1) Sempre prioriza itens de "continuar lendo"
     const progresso = (state.painel?.leitura?.progresso || []);
     for (const p of progresso) {
         const historia = p.historia;
@@ -550,32 +551,89 @@ function renderInicioEmAlta() {
         }
     }
 
-    if (output.length < maxItems) {
-        // Descobrir gêneros que o usuário curtiu (baseado em avaliações altas no catálogo/minhasHistorias)
-        const likedGenres = new Set();
-        const candidates = [...(state.catalogo || []), ...(state.minhasHistorias || [])];
-        for (const s of candidates) {
-            const nota = Number(s?.minha_avaliacao || 0);
-            if (nota >= 4 && s?.genero) likedGenres.add(String(s.genero));
-        }
-
-        // Preencher com histórias do catálogo que pertençam aos gêneros curtidos
-        for (const s of state.catalogo || []) {
-            if (output.length >= maxItems) break;
-            if (!s || included.has(s.id)) continue;
-            if (likedGenres.size === 0 || likedGenres.has(s.genero)) {
-                included.add(s.id);
-                output.push(s);
-            }
+    // 2) Calcula pontuação por gênero com base nas avaliações do usuário
+    const genreScores = {};
+    const sources = [...(state.catalogo || []), ...(state.minhasHistorias || [])];
+    for (const s of sources) {
+        if (!s || !s.genero) continue;
+        const g = String(s.genero);
+        const nota = Number(s?.minha_avaliacao || 0);
+        genreScores[g] = genreScores[g] || 0;
+        if (nota >= 5) {
+            genreScores[g] += 6.0;
+        } else if (nota >= 4) {
+            genreScores[g] += 3.0;
+        } else if (nota <= 2 && nota > 0) {
+            genreScores[g] -= 10.0;
         }
     }
 
-    if (!output.length) {
+    // 3) Gera candidatos com score combinado
+    const candidates = (state.catalogo || []).filter((s) => s && !included.has(s.id));
+    const scored = candidates.map((s) => {
+        const media = Number(s.media_avaliacoes || 0);
+        const total = Number(s.total_avaliacoes || 0);
+        const genero = s.genero || '';
+        let score = 0;
+        // sinais públicos: média e volume ajudam
+        score += media * 1.2;
+        score += Math.log(1 + total) * 0.6;
+        // boost por gênero preferido
+        if (genreScores[genero]) score += genreScores[genero] * 1.2;
+        // boost se o próprio leitor avaliou com 'amei' ou 'gostei'
+        const minha = Number(s?.minha_avaliacao || 0);
+        if (minha >= 5) score += 10; // garantir presença na home
+        else if (minha >= 4) score += 4; // preferir
+        else if (minha > 0 && minha <= 2) score -= 12; // penaliza forte
+
+        return {story: s, score};
+    });
+
+    if (!scored.length && !output.length) {
         el.inicioEmAlta.innerHTML = `<p class="placeholder">Sem histórias em alta agora.</p>`;
         return;
     }
 
-    el.inicioEmAlta.innerHTML = output.map((story) => renderStoryCard(story)).join('');
+    // 4) Normaliza scores em probabilidades via softmax (exp) e ordena
+    const exps = scored.map((c) => Math.exp(Math.max(-20, Math.min(20, c.score))));
+    const sumExp = exps.reduce((a, b) => a + b, 0) || 1;
+    const scoredWithProb = scored.map((c, i) => {
+        const prob = exps[i] / sumExp;
+        // anexa probabilidade percentual ao objeto de história para possível exibição
+        c.story.recommendation_probability = Math.round(prob * 100);
+        return {...c, prob};
+    });
+
+    // Ordena por probabilidade (decrescente) e inclui até preencher o máximo
+    scoredWithProb.sort((a, b) => b.prob - a.prob);
+    for (const item of scoredWithProb) {
+        if (output.length >= maxItems) break;
+        if (!item.story || included.has(item.story.id)) continue;
+        // regras adicionais: se o usuário marcou 'não gostei' (minha_avaliacao <=2) omitimos frequentemente
+        const minha = Number(item.story?.minha_avaliacao || 0);
+        if (minha > 0 && minha <= 2) {
+            // chance muito baixa — ignora a menos que ainda faltem itens
+            if (output.length + 2 < maxItems) continue;
+        }
+        included.add(item.story.id);
+        output.push(item.story);
+    }
+
+    // 5) Garanta que qualquer livro com 'gostei' ou 'amei' esteja visível se houver espaço
+    for (const s of candidates) {
+        if (output.length >= maxItems) break;
+        const minha = Number(s?.minha_avaliacao || 0);
+        if ((minha >= 4) && !included.has(s.id)) {
+            included.add(s.id);
+            output.push(s);
+        }
+    }
+
+    el.inicioEmAlta.innerHTML = output.map((story) => {
+        // garante que exista a propriedade de probabilidade
+        if (typeof story.recommendation_probability === 'undefined') story.recommendation_probability = 0;
+        return renderStoryCard(story);
+    }).join('');
 }
 
 function renderHistorias() {
