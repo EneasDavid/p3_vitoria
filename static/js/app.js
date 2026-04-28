@@ -260,6 +260,7 @@ function bindGlobalEvents() {
     el.voceProgresso?.addEventListener('click', handleStoryActionClick);
     el.voceAutoria?.addEventListener('click', handleStoryActionClick);
     el.autoriaHistorias?.addEventListener('click', handleStoryActionClick);
+    el.writerModalChaptersList?.addEventListener('click', handleStoryActionClick);
 
     el.formNovaHistoria?.addEventListener('submit', publicarHistoria);
     el.formNovoCapitulo?.addEventListener('submit', publicarCapitulo);
@@ -534,12 +535,47 @@ function renderInicioEmAlta() {
     if (!el.inicioEmAlta) {
         return;
     }
-    const stories = state.catalogo.slice(0, 4);
-    if (!stories.length) {
+    // Mostrar até 8 livros: primeiro itens de "continuar lendo", depois livros dos gêneros curtidos
+    const maxItems = 8;
+    const included = new Set();
+    const output = [];
+
+    const progresso = (state.painel?.leitura?.progresso || []);
+    for (const p of progresso) {
+        const historia = p.historia;
+        if (historia && !included.has(historia.id)) {
+            included.add(historia.id);
+            output.push(historia);
+            if (output.length >= maxItems) break;
+        }
+    }
+
+    if (output.length < maxItems) {
+        // Descobrir gêneros que o usuário curtiu (baseado em avaliações altas no catálogo/minhasHistorias)
+        const likedGenres = new Set();
+        const candidates = [...(state.catalogo || []), ...(state.minhasHistorias || [])];
+        for (const s of candidates) {
+            const nota = Number(s?.minha_avaliacao || 0);
+            if (nota >= 4 && s?.genero) likedGenres.add(String(s.genero));
+        }
+
+        // Preencher com histórias do catálogo que pertençam aos gêneros curtidos
+        for (const s of state.catalogo || []) {
+            if (output.length >= maxItems) break;
+            if (!s || included.has(s.id)) continue;
+            if (likedGenres.size === 0 || likedGenres.has(s.genero)) {
+                included.add(s.id);
+                output.push(s);
+            }
+        }
+    }
+
+    if (!output.length) {
         el.inicioEmAlta.innerHTML = `<p class="placeholder">Sem histórias em alta agora.</p>`;
         return;
     }
-    el.inicioEmAlta.innerHTML = stories.map((story) => renderStoryCard(story)).join('');
+
+    el.inicioEmAlta.innerHTML = output.map((story) => renderStoryCard(story)).join('');
 }
 
 function renderHistorias() {
@@ -1733,7 +1769,6 @@ function renderModalLeitura(paginaInicial = 'manter') {
     if (el.readerMeta) {
         el.readerMeta.textContent = `Capítulo ${capitulo.ordem}: ${capitulo.titulo}`;
     }
-    el.readerSampleBanner?.classList.remove('hidden');
     renderReaderChapterSelect();
     sincronizarControlesLeitor();
     aplicarPaginacaoCapitulo(paginaInicial);
@@ -1758,7 +1793,9 @@ function renderModalLeitura(paginaInicial = 'manter') {
     }
 
     renderMarcacoesLeitor();
-    renderSessoesLeitura();
+    // remover exibição de sessões de leitura (apenas manter tempo estimado para capítulo)
+    if (el.readerSessionsList) el.readerSessionsList.innerHTML = '';
+    if (el.readerSessionsCount) el.readerSessionsCount.textContent = '0';
     atualizarTempoPrevisto();
     atualizarTempoLeituraUI();
 }
@@ -2085,17 +2122,33 @@ function obterDestaquesDaPagina(textoPagina) {
 }
 
 function renderTextoComDestaques(texto, destaques) {
-    let resultado = escapeHtml(texto);
+    // Primeiro escape do texto
+    let base = escapeHtml(texto);
+    if (!destaques || !destaques.length) {
+        // aplica markdown inline quando não há destaques
+        return renderMarkdownInline(base);
+    }
+
+    // Substitui trechos destacados por placeholders para não conflitar com markdown
+    const placeholders = [];
+    let idx = 0;
     for (const destaque of destaques) {
         const trecho = String(destaque.trecho || '');
-        if (!trecho) {
-            continue;
-        }
+        if (!trecho) continue;
         const classe = destaque.tipo === 'meu' ? 'reader-highlight-user' : 'reader-highlight-popular';
         const escapedTrecho = escapeHtml(trecho);
-        resultado = resultado.split(escapedTrecho).join(`<mark class="${classe}">${escapedTrecho}</mark>`);
+        const placeholder = `[[MARK_${idx}]]`;
+        base = base.split(escapedTrecho).join(placeholder);
+        placeholders.push({placeholder, html: `<mark class="${classe}">${escapedTrecho}</mark>`});
+        idx += 1;
     }
-    return resultado;
+
+    // Aplica markdown inline ao texto e restaura os highlights
+    base = renderMarkdownInline(base);
+    for (const ph of placeholders) {
+        base = base.split(ph.placeholder).join(ph.html);
+    }
+    return base;
 }
 
 function renderMarcacoesLeitor() {
@@ -3002,4 +3055,19 @@ function escapeHtml(value) {
 
 function escapeAttribute(value) {
     return escapeHtml(value);
+}
+
+// Render markdown básico (inline): **negrito** e *itálico*
+function renderMarkdownInline(escapedText) {
+    if (!escapedText) return '';
+    let out = String(escapedText);
+    try {
+        // Negrito: **texto** -> <strong>
+        out = out.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        // Itálico: *texto* -> <em> (após negrito para evitar conflito)
+        out = out.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    } catch (e) {
+        return escapedText;
+    }
+    return out;
 }
