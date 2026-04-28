@@ -317,6 +317,15 @@ class UsuarioController:
         return HistoriaController.criar_historia(titulo, sinopse, genero, conta['autor_id'], capa=capa)
 
     @staticmethod
+    def consultar_metadados_epub_por_token(token: str, epub_data: str) -> dict:
+        """Consulta metadados de EPUB para pré-preenchimento no fluxo de criação."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+        from app.controllers.historia_controller import HistoriaController
+        return HistoriaController.consultar_metadados_epub(epub_data)
+
+    @staticmethod
     def editar_historia_por_token(token: str, historia_id: str, titulo: str, sinopse: str, genero: str, capa: str | None = None) -> dict:
         """Edita dados de uma história da própria conta."""
         contexto = UsuarioController._obter_contexto_autenticado(token)
@@ -826,24 +835,59 @@ class UsuarioController:
 
     @staticmethod
     def obter_recomendacoes(usuario_id: str, limite: int = 4) -> dict:
-        """Retorna recomendações simples com base nas preferências do leitor."""
+        """Retorna recomendações com foco em gêneros amados e bloqueio por desgosto."""
         usuario = usuarios_db.get(usuario_id)
         if not isinstance(usuario, Leitor):
             return {'sucesso': False, 'erro': 'Leitor não encontrado', 'codigo': 404}
 
         from app.controllers.historia_controller import historias_db, HistoriaController
 
-        preferencias = {}
+        def normalizar_genero(genero: str) -> str:
+            genero_limpo = UsuarioController._limpar_texto(genero)
+            return genero_limpo.casefold() if genero_limpo else 'geral'
+
+        preferencias: dict[str, float] = {}
+        generos_amados: set[str] = set()
+        generos_bloqueados: set[str] = set()
+
+        # Preferências explícitas vindas de avaliação do próprio leitor.
+        for historia in historias_db.values():
+            genero = normalizar_genero(historia.genero)
+            for avaliacao in historia.avaliacoes:
+                avaliador = getattr(avaliacao, 'usuario', None)
+                if not avaliador or getattr(avaliador, 'id_usuario', None) != usuario_id:
+                    continue
+                nota = int(getattr(avaliacao, 'nota', 0) or 0)
+                if nota >= 5:
+                    preferencias[genero] = preferencias.get(genero, 0) + 6.0
+                    generos_amados.add(genero)
+                elif nota >= 4:
+                    preferencias[genero] = preferencias.get(genero, 0) + 3.0
+                elif nota <= 2:
+                    preferencias[genero] = preferencias.get(genero, 0) - 10.0
+                    generos_bloqueados.add(genero)
+                else:
+                    preferencias[genero] = preferencias.get(genero, 0) + 1.0
+
+        # Leitura/biblioteca entra como sinal secundário.
         for historia in usuario.biblioteca.obter_todas_as_historias():
-            genero = historia.genero or 'Geral'
-            preferencias[genero] = preferencias.get(genero, 0) + 1
+            genero = normalizar_genero(historia.genero)
+            if genero in generos_bloqueados:
+                continue
+            preferencias[genero] = preferencias.get(genero, 0) + 0.8
 
         historias_salvas = {historia.id for historia in usuario.biblioteca.obter_todas_as_historias()}
-        candidatas = [historia for historia in historias_db.values() if historia.id not in historias_salvas]
+        candidatas = [
+            historia for historia in historias_db.values()
+            if historia.id not in historias_salvas
+            and normalizar_genero(historia.genero) not in generos_bloqueados
+        ]
 
         def pontuacao(historia):
-            genero_score = preferencias.get(historia.genero, 0) * 3
-            return genero_score + historia.obter_popularidade()
+            genero = normalizar_genero(historia.genero)
+            genero_score = preferencias.get(genero, 0) * 4
+            bonus_amado = 10 if genero in generos_amados else 0
+            return bonus_amado + genero_score + historia.obter_popularidade() + (historia.obter_media_avaliacoes() * 1.2)
 
         candidatas.sort(key=pontuacao, reverse=True)
         recomendadas = candidatas[:limite]

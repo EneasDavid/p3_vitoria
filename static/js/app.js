@@ -2,7 +2,7 @@ const API_BASE = '/api';
 const TOKEN_KEY = 'storyflow_token';
 const PAGE = window.STORYFLOW_PAGE || 'inicio';
 const READER_FONTS = new Set(['serif_classic', 'georgia', 'book', 'sans_clean']);
-const READER_BACKGROUNDS = new Set(['paper_yellow', 'cream', 'off_white', 'sepia_dark']);
+const READER_BACKGROUNDS = new Set(['paper_yellow', 'cream', 'off_white', 'sepia_dark', 'site_night']);
 
 const state = {
     page: PAGE,
@@ -40,6 +40,11 @@ const state = {
         q: '',
         genero: '',
         ordem: 'destaques',
+    },
+    writer: {
+        screen: 'book',
+        autoCoverFromEpub: null,
+        epubMetadata: null,
     },
     debounce: null,
 };
@@ -97,9 +102,16 @@ function cacheElements() {
     el.historiaEditId = document.getElementById('historia-edit-id');
     el.historiaSubmit = document.getElementById('historia-submit');
     el.writerModalChaptersList = document.getElementById('writer-modal-chapters-list');
+    el.writerScreenBookBtn = document.getElementById('writer-screen-book-btn');
+    el.writerScreenChaptersBtn = document.getElementById('writer-screen-chapters-btn');
+    el.storyCoverPreview = document.getElementById('story-cover-preview');
     el.storyCoverInput = document.getElementById('story-cover-input');
     el.storyFileInput = document.getElementById('story-file-input');
     el.storyPreviewInput = document.getElementById('story-preview-input');
+    el.storyTitleInput = document.getElementById('story-title-input');
+    el.storyGenreInput = document.getElementById('story-genre-input');
+    el.storySynopsisInput = document.getElementById('story-synopsis');
+    el.storyEpubMetaHint = document.getElementById('story-epub-meta-hint');
     el.capituloHistoriaId = document.getElementById('capitulo-historia-id');
     el.capituloEditId = document.getElementById('capitulo-edit-id');
     el.capituloFormTitle = document.getElementById('capitulo-form-title');
@@ -237,8 +249,6 @@ function bindGlobalEvents() {
     el.inicioEmAlta?.addEventListener('click', handleStoryActionClick);
     el.historiasGrid?.addEventListener('click', handleStoryActionClick);
     el.historiaDetalhe?.addEventListener('click', handleStoryActionClick);
-    el.historiaDetalhe?.addEventListener('mouseover', handleRatingHover);
-    el.historiaDetalhe?.addEventListener('mouseout', handleRatingHoverOut);
     el.bibliotecaCategorias?.addEventListener('click', handleStoryActionClick);
     el.bibliotecaProgresso?.addEventListener('click', handleStoryActionClick);
     el.voceProgresso?.addEventListener('click', handleStoryActionClick);
@@ -249,6 +259,10 @@ function bindGlobalEvents() {
     el.formNovoCapitulo?.addEventListener('submit', publicarCapitulo);
     el.writerEditorBackdrop?.addEventListener('click', fecharEditorAutoria);
     el.writerEditorClose?.addEventListener('click', fecharEditorAutoria);
+    el.writerScreenBookBtn?.addEventListener('click', () => definirTelaEditorAutoria('book'));
+    el.writerScreenChaptersBtn?.addEventListener('click', () => definirTelaEditorAutoria('chapters'));
+    el.storyFileInput?.addEventListener('change', consultarMetadadosEpubSelecionado);
+    el.storyCoverInput?.addEventListener('change', atualizarPreviewCapaSelecionada);
     el.capituloEditCancel?.addEventListener('click', () => {
         limparEdicaoCapitulo(true);
     });
@@ -426,7 +440,7 @@ function renderInicioDestaque() {
         <p class="muted">${escapeHtml(destaque.sinopse)}</p>
         <p class="meta-line">${escapeHtml(destaque.autor || 'Autor desconhecido')} · ${escapeHtml(destaque.genero || 'Leitura')}</p>
         <div class="inline-actions">
-            <button class="btn-ghost" data-action="abrir-historia" data-story-id="${destaque.id}" type="button">Ver detalhes</button>
+            <button class="btn-ghost" data-action="abrir-historia" data-story-id="${destaque.id}" type="button">Ler agora</button>
             <button class="btn-primary" data-action="abrir-capitulo" data-story-id="${destaque.id}" data-chapter-id="${chapterId || ''}" type="button">
                 ${destaque.progresso_leitor ? 'Continuar' : 'Ler agora'}
             </button>
@@ -457,7 +471,7 @@ function renderInicioRecomendacoes() {
                         <strong>${escapeHtml(story.titulo)}</strong>
                         <p class="muted">${escapeHtml(story.autor || 'Autor')} · ${escapeHtml(story.genero || 'Leitura')}</p>
                     </div>
-                    <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Abrir</button>
+                    <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Ler</button>
                 </article>
             `).join('')}
         </div>
@@ -570,6 +584,7 @@ function renderDetalheHistoria() {
     }
 
     const progresso = story.progresso_leitor?.percentual;
+    const sentimentoSelecionado = notaParaSentimento(story.minha_avaliacao);
     el.historiaDetalhe.innerHTML = `
         <p class="chip">${escapeHtml(story.genero || 'Leitura')}</p>
         <h3>${escapeHtml(story.titulo)}</h3>
@@ -582,23 +597,36 @@ function renderDetalheHistoria() {
             <button class="btn-ghost" data-action="salvar-historia" data-story-id="${story.id}" data-categoria="favoritos" type="button">Favoritar</button>
         </div>
         <div class="rating-range-card">
-            <label for="story-rating-range" class="muted">Sua avaliação</label>
-            <div id="story-rating-hover" class="rating-stars-hover" role="group" aria-label="Selecionar nota" data-rating-selected="5">
-                ${[1, 2, 3, 4, 5].map((valor) => `
-                    <button type="button" class="hover-star is-active" data-hover-star="${valor}" data-action="avaliar-historia" data-story-id="${story.id}" data-nota="${valor}" aria-label="Avaliar ${valor} estrelas">★</button>
-                `).join('')}
+            <label class="muted">Sua avaliação</label>
+            <div class="story-sentiment-group" role="group" aria-label="Avaliar história">
+                <button
+                    type="button"
+                    class="story-sentiment-btn ${sentimentoSelecionado === 'amei' ? 'is-active' : ''}"
+                    data-action="avaliar-sentimento"
+                    data-story-id="${story.id}"
+                    data-sentimento-voto="amei"
+                >
+                    Amei
+                </button>
+                <button
+                    type="button"
+                    class="story-sentiment-btn ${sentimentoSelecionado === 'gostei' ? 'is-active' : ''}"
+                    data-action="avaliar-sentimento"
+                    data-story-id="${story.id}"
+                    data-sentimento-voto="gostei"
+                >
+                    Gostei
+                </button>
+                <button
+                    type="button"
+                    class="story-sentiment-btn ${sentimentoSelecionado === 'nao_gostei' ? 'is-active' : ''}"
+                    data-action="avaliar-sentimento"
+                    data-story-id="${story.id}"
+                    data-sentimento-voto="nao_gostei"
+                >
+                    Não gostei
+                </button>
             </div>
-            <p class="muted rating-hover-tip">Passe o mouse nas estrelas e clique para fixar a nota.</p>
-            <input
-                id="story-rating-range"
-                type="range"
-                min="1"
-                max="5"
-                step="1"
-                value="5"
-                data-story-id="${story.id}"
-                class="rating-range-hidden"
-            >
         </div>
         <div class="stack-list">
             ${(story.capitulos || []).map((chapter) => `
@@ -612,10 +640,9 @@ function renderDetalheHistoria() {
             `).join('')}
         </div>
     `;
-    // initialize rating selector with user's own rating if available, otherwise use rounded média
     const initialRating = (typeof story.minha_avaliacao === 'number' && story.minha_avaliacao > 0)
         ? Number(story.minha_avaliacao)
-        : Math.max(1, Math.min(5, Math.round(Number(story.media_avaliacoes || 0) || 5)));
+        : 4;
     atualizarSeletorAvaliacao(initialRating);
 }
 
@@ -652,7 +679,7 @@ function renderBiblioteca() {
                                 <p class="muted">${escapeHtml(story.autor || 'Autor')}</p>
                                 ${tempoTotal ? `<p class="muted">Tempo gasto: ${formatarTempo(tempoTotal)} · ${tempoPorPagina ? `~${formatarTempo(tempoPorPagina)}/página` : ''}</p>` : ''}
                             </div>
-                            <span>Ver</span>
+                            <span>Ler</span>
                         </button>`;
                     }).join('') : `<p class="placeholder">Sem histórias nesta categoria.</p>`}
                 </div>
@@ -717,16 +744,132 @@ function renderEscrever() {
     sincronizarFormularioCapituloAutoria();
 }
 
+function ehLivroImportadoPorEpub(story) {
+    return Boolean(story?.tem_epub);
+}
+
+function definirTelaEditorAutoria(screen) {
+    if (!el.writerEditorModal || !['book', 'chapters'].includes(screen)) {
+        return;
+    }
+    if (screen === 'chapters' && !obterHistoriaAutoriaSelecionada()) {
+        showToast('Crie o livro primeiro para abrir a tela de capítulos.', true);
+        return;
+    }
+
+    state.writer.screen = screen;
+    const telas = el.writerEditorModal.querySelectorAll('[data-writer-screen]');
+    telas.forEach((item) => {
+        const ativa = item.dataset.writerScreen === screen;
+        item.classList.toggle('is-active', ativa);
+    });
+
+    const tabLivroAtiva = screen === 'book';
+    el.writerScreenBookBtn?.classList.toggle('is-active', tabLivroAtiva);
+    el.writerScreenBookBtn?.setAttribute('aria-selected', tabLivroAtiva ? 'true' : 'false');
+    el.writerScreenChaptersBtn?.classList.toggle('is-active', !tabLivroAtiva);
+    el.writerScreenChaptersBtn?.setAttribute('aria-selected', tabLivroAtiva ? 'false' : 'true');
+    sincronizarTabsCriacao(obterHistoriaAutoriaSelecionada());
+    if (el.writerEditorMode) {
+        el.writerEditorMode.textContent = tabLivroAtiva ? 'Tela 1 de 2: livro' : 'Tela 2 de 2: capítulos';
+    }
+}
+
+function atualizarPreviewCapa(src, mensagem = 'Adicionar capa do livro') {
+    if (!el.storyCoverPreview) {
+        return;
+    }
+    if (src) {
+        el.storyCoverPreview.innerHTML = `<img src="${escapeAttribute(src)}" alt="Prévia da capa" class="writer-cover-preview-image">`;
+        return;
+    }
+    el.storyCoverPreview.innerHTML = `
+        ${escapeHtml(mensagem)}
+        <div class="upload-hint">Clique para selecionar a imagem</div>
+    `;
+}
+
+async function atualizarPreviewCapaSelecionada() {
+    const coverFile = el.storyCoverInput?.files?.[0];
+    if (!coverFile) {
+        atualizarPreviewCapa(state.writer.autoCoverFromEpub);
+        return;
+    }
+    state.writer.autoCoverFromEpub = null;
+    const dataUrl = await lerArquivoComoDataURL(coverFile);
+    atualizarPreviewCapa(dataUrl, 'Capa selecionada');
+}
+
+async function consultarMetadadosEpubSelecionado() {
+    const epubFile = el.storyFileInput?.files?.[0];
+    if (!epubFile) {
+        state.writer.epubMetadata = null;
+        if (el.storyEpubMetaHint) {
+            el.storyEpubMetaHint.textContent = 'Se faltarem dados, o sistema usa os metadados do EPUB automaticamente.';
+        }
+        return;
+    }
+
+    const tiposPermitidosEpub = new Set(['application/epub+zip', 'application/octet-stream']);
+    const nome = String(epubFile.name || '').toLowerCase();
+    if (!tiposPermitidosEpub.has(epubFile.type) && !nome.endsWith('.epub')) {
+        showToast('Formato de EPUB inválido. Use arquivo .epub.', true);
+        return;
+    }
+    if (epubFile.size > 20 * 1024 * 1024) {
+        showToast('EPUB muito grande. Use até 20MB.', true);
+        return;
+    }
+
+    try {
+        const dataUrl = await lerArquivoComoDataURL(epubFile);
+        const response = await api('/me/autoria/epub-metadata', {
+            method: 'POST',
+            body: {epub: dataUrl},
+        });
+        const meta = response.metadados || {};
+        state.writer.epubMetadata = meta;
+
+        if (el.storyTitleInput && !el.storyTitleInput.value.trim() && meta.titulo) {
+            el.storyTitleInput.value = meta.titulo;
+        }
+        if (el.storySynopsisInput && !el.storySynopsisInput.value.trim() && meta.sinopse) {
+            el.storySynopsisInput.value = meta.sinopse;
+        }
+        if (el.storyGenreInput && !el.storyGenreInput.value.trim() && meta.genero) {
+            el.storyGenreInput.value = meta.genero;
+        }
+        if (!el.storyCoverInput?.files?.length && meta.capa) {
+            state.writer.autoCoverFromEpub = meta.capa;
+            atualizarPreviewCapa(meta.capa, 'Capa do EPUB aplicada');
+        }
+        if (el.storyEpubMetaHint) {
+            const totalCapitulos = Number(meta.total_capitulos || 0);
+            el.storyEpubMetaHint.textContent = totalCapitulos
+                ? `Metadados lidos com sucesso. ${totalCapitulos} capítulos detectados no EPUB.`
+                : 'Metadados lidos. O EPUB não trouxe capítulos válidos.';
+        }
+        showToast(response.mensagem || 'Metadados do EPUB carregados.');
+    } catch (error) {
+        state.writer.epubMetadata = null;
+        handleError(error);
+    }
+}
+
 function renderPainelCapitulosAutoria(story) {
     const capitulos = story.capitulos || [];
+    const bloqueadoPorEpub = ehLivroImportadoPorEpub(story);
     if (!el.writerModalChaptersList) {
         return;
     }
     el.writerModalChaptersList.innerHTML = `
         <div class="writer-chapter-list-head">
             <strong>${capitulos.length} capítulos</strong>
-            <button class="btn-primary" data-action="novo-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" type="button">+ Capítulo</button>
+            ${bloqueadoPorEpub
+                ? `<span class="chip">EPUB importado</span>`
+                : `<button class="btn-primary" data-action="novo-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" type="button">+ Capítulo</button>`}
         </div>
+        ${bloqueadoPorEpub ? `<p class="muted">Livro criado por EPUB: apenas edição dos capítulos existentes.</p>` : ''}
         ${capitulos.length ? capitulos.map((chapter) => `
             <article class="writer-chapter-item">
                 <div>
@@ -749,10 +892,23 @@ function obterHistoriaAutoriaSelecionada() {
     return selecionada || null;
 }
 
-function abrirEditorAutoria(storyId = null) {
+function sincronizarTabsCriacao(historia) {
+    const habilitarCapitulos = Boolean(historia);
+    if (el.writerScreenChaptersBtn) {
+        el.writerScreenChaptersBtn.classList.toggle('hidden', !habilitarCapitulos);
+        el.writerScreenChaptersBtn.disabled = !habilitarCapitulos;
+        el.writerScreenChaptersBtn.setAttribute('aria-selected', habilitarCapitulos && state.writer.screen === 'chapters' ? 'true' : 'false');
+    }
+    if (el.writerScreenBookBtn) {
+        el.writerScreenBookBtn.setAttribute('aria-selected', state.writer.screen === 'book' ? 'true' : 'false');
+    }
+}
+
+function abrirEditorAutoria(storyId = null, options = {}) {
     state.autoriaSelecionadaId = storyId || null;
     state.capituloEditandoId = null;
     const historia = obterHistoriaAutoriaSelecionada();
+    const telaInicial = options.screen || (historia ? 'chapters' : 'book');
 
     if (el.formNovaHistoria) {
         el.formNovaHistoria.reset();
@@ -763,6 +919,12 @@ function abrirEditorAutoria(storyId = null) {
     if (el.storyCoverInput) {
         el.storyCoverInput.value = '';
     }
+    if (el.storyFileInput) {
+        el.storyFileInput.value = '';
+    }
+    state.writer.autoCoverFromEpub = null;
+    state.writer.epubMetadata = null;
+    atualizarPreviewCapa(historia?.capa || null);
     if (el.historiaEditId) {
         el.historiaEditId.value = historia?.id || '';
     }
@@ -778,12 +940,15 @@ function abrirEditorAutoria(storyId = null) {
             el.formNovaHistoria.elements.sinopse.value = historia.sinopse || '';
         }
     }
+    if (el.storyEpubMetaHint) {
+        el.storyEpubMetaHint.textContent = 'Se faltarem dados, o sistema usa os metadados do EPUB automaticamente.';
+    }
 
     if (el.writerEditorTitle) {
         el.writerEditorTitle.textContent = historia ? historia.titulo : 'Novo livro';
     }
     if (el.writerEditorMode) {
-        el.writerEditorMode.textContent = historia ? 'Editar livro' : 'Criar livro';
+        el.writerEditorMode.textContent = historia ? 'Tela 2 de 2: capítulos' : 'Tela 1 de 2: livro';
     }
     if (el.historiaSubmit) {
         el.historiaSubmit.textContent = historia ? 'Salvar dados do livro' : 'Criar livro';
@@ -791,7 +956,11 @@ function abrirEditorAutoria(storyId = null) {
 
     if (historia) {
         renderPainelCapitulosAutoria(historia);
-        prepararNovoCapitulo(historia.id, false);
+        if (!ehLivroImportadoPorEpub(historia)) {
+            prepararNovoCapitulo(historia.id, false);
+        } else {
+            sincronizarFormularioCapituloAutoria();
+        }
     } else {
         renderPainelCapitulosAutoriaVazio();
         sincronizarFormularioCapituloAutoria();
@@ -799,7 +968,11 @@ function abrirEditorAutoria(storyId = null) {
 
     el.writerEditorModal?.classList.remove('hidden');
     el.writerEditorModal?.setAttribute('aria-hidden', 'false');
-    el.formNovaHistoria?.elements?.titulo?.focus();
+    sincronizarTabsCriacao(historia);
+    definirTelaEditorAutoria(telaInicial);
+    if (state.writer.screen === 'book') {
+        el.formNovaHistoria?.elements?.titulo?.focus();
+    }
     renderEscrever();
 }
 
@@ -807,18 +980,22 @@ function fecharEditorAutoria() {
     el.writerEditorModal?.classList.add('hidden');
     el.writerEditorModal?.setAttribute('aria-hidden', 'true');
     state.capituloEditandoId = null;
+    state.writer.autoCoverFromEpub = null;
+    state.writer.epubMetadata = null;
+    state.writer.screen = 'book';
     renderEscrever();
 }
 
 function renderPainelCapitulosAutoriaVazio() {
     if (el.writerModalChaptersList) {
-        el.writerModalChaptersList.innerHTML = `<p class="placeholder">Crie o livro para liberar capítulos.</p>`;
+        el.writerModalChaptersList.innerHTML = `<p class="placeholder">Crie o livro na tela "Livro" para liberar capítulos.</p>`;
     }
 }
 
 function sincronizarFormularioCapituloAutoria() {
     const historia = obterHistoriaAutoriaSelecionada();
     const editando = Boolean(state.capituloEditandoId);
+    const bloqueadoPorEpub = Boolean(historia && ehLivroImportadoPorEpub(historia) && !editando);
     const tituloInput = el.formNovoCapitulo?.elements?.titulo;
     const conteudoInput = el.formNovoCapitulo?.elements?.conteudo;
 
@@ -837,26 +1014,37 @@ function sincronizarFormularioCapituloAutoria() {
             : 'Capítulos';
     }
     if (el.capituloFormHint) {
-        el.capituloFormHint.textContent = historia
-            ? (editando ? 'Altere o título ou conteúdo e salve.' : 'Adicione um capítulo novo ou escolha um existente para editar.')
-            : 'Escolha uma capa da sua biblioteca para adicionar ou editar capítulos.';
+        if (!historia) {
+            el.capituloFormHint.textContent = 'Crie o livro na tela "Livro" para liberar os capítulos.';
+        } else if (bloqueadoPorEpub) {
+            el.capituloFormHint.textContent = 'Este livro veio de EPUB: você pode editar capítulos existentes, mas não criar novos.';
+        } else if (editando) {
+            el.capituloFormHint.textContent = 'Altere o título ou conteúdo e salve.';
+        } else {
+            el.capituloFormHint.textContent = 'Adicione um capítulo novo ou escolha um existente para editar.';
+        }
     }
     if (el.capituloSubmit) {
         el.capituloSubmit.textContent = editando ? 'Salvar capítulo' : 'Adicionar capítulo';
-        el.capituloSubmit.disabled = !historia;
+        el.capituloSubmit.disabled = !historia || bloqueadoPorEpub;
     }
     if (el.capituloEditCancel) {
         el.capituloEditCancel.classList.toggle('hidden', !editando);
     }
     if (tituloInput) {
-        tituloInput.disabled = !historia;
+        tituloInput.disabled = !historia || bloqueadoPorEpub;
     }
     if (conteudoInput) {
-        conteudoInput.disabled = !historia;
+        conteudoInput.disabled = !historia || bloqueadoPorEpub;
     }
 }
 
 function prepararNovoCapitulo(storyId, rolar = false) {
+    const historia = (state.minhasHistorias || []).find((story) => story.id === storyId);
+    if (historia && ehLivroImportadoPorEpub(historia)) {
+        showToast('Livro importado por EPUB permite apenas edição dos capítulos existentes.', true);
+        return;
+    }
     state.autoriaSelecionadaId = storyId;
     state.capituloEditandoId = null;
     if (el.formNovoCapitulo) {
@@ -889,6 +1077,7 @@ function preencherEdicaoCapitulo(storyId, chapterId) {
     el.formNovoCapitulo.elements.capitulo_id.value = chapterId;
     el.formNovoCapitulo.elements.titulo.value = capitulo.titulo || '';
     el.formNovoCapitulo.elements.conteudo.value = capitulo.conteudo || '';
+    definirTelaEditorAutoria('chapters');
     sincronizarFormularioCapituloAutoria();
     el.formNovoCapitulo.scrollIntoView({behavior: 'smooth', block: 'center'});
     el.formNovoCapitulo.elements.titulo.focus();
@@ -896,6 +1085,13 @@ function preencherEdicaoCapitulo(storyId, chapterId) {
 
 function limparEdicaoCapitulo(rolar = false) {
     const storyId = state.autoriaSelecionadaId || el.capituloHistoriaId?.value || '';
+    const historia = (state.minhasHistorias || []).find((story) => story.id === storyId);
+    if (historia && ehLivroImportadoPorEpub(historia)) {
+        state.capituloEditandoId = null;
+        el.formNovoCapitulo?.reset();
+        sincronizarFormularioCapituloAutoria();
+        return;
+    }
     prepararNovoCapitulo(storyId, rolar);
 }
 
@@ -965,27 +1161,62 @@ function renderVoce() {
                         <strong>${escapeHtml(story.titulo)}</strong>
                         <p class="muted">${escapeHtml(story.sinopse)}</p>
                     </div>
-                    <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Abrir</button>
+                    <button class="btn-ghost" data-action="abrir-historia" data-story-id="${story.id}" type="button">Ler</button>
                 </article>
             `).join('')
             : `<p class="placeholder">Você ainda não publicou histórias.</p>`;
     }
 }
 
+function sentimentoParaNota(sentimento) {
+    const valor = String(sentimento || '').trim();
+    if (valor === 'amei') {
+        return 5;
+    }
+    if (valor === 'gostei') {
+        return 4;
+    }
+    if (valor === 'nao_gostei') {
+        return 1;
+    }
+    return 0;
+}
+
+function notaParaSentimento(nota) {
+    const valor = Number(nota || 0);
+    if (valor >= 5) {
+        return 'amei';
+    }
+    if (valor >= 3) {
+        return 'gostei';
+    }
+    if (valor > 0) {
+        return 'nao_gostei';
+    }
+    return '';
+}
+
 function renderStoryCard(story) {
     const cardClass = state.page === 'inicio' ? 'story-home-card' : '';
+    const sentimentoSelecionado = notaParaSentimento(story.minha_avaliacao);
     return `
-        <article class="writer-book-card ${cardClass} ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}" data-story-id="${escapeAttribute(story.id)}">
+        <article class="writer-book-card ${cardClass} story-discovery-card ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}" data-story-id="${escapeAttribute(story.id)}">
             <button class="writer-book-cover" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}" type="button" aria-label="Abrir ${escapeAttribute(story.titulo)}">
                 ${renderStoryCover(story)}
             </button>
+            <div class="story-hover-actions" aria-label="Ações rápidas">
+                <button class="story-quick-btn" data-action="salvar-historia" data-story-id="${escapeAttribute(story.id)}" data-categoria="favoritos" type="button">Favoritar</button>
+                <button class="story-quick-btn ${sentimentoSelecionado === 'amei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="amei" type="button">Amei</button>
+                <button class="story-quick-btn ${sentimentoSelecionado === 'gostei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="gostei" type="button">Gostei</button>
+                <button class="story-quick-btn ${sentimentoSelecionado === 'nao_gostei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="nao_gostei" type="button">Não gostei</button>
+            </div>
             <div class="writer-book-info">
                 <strong>${escapeHtml(story.titulo)}</strong>
                 <span>${story.total_capitulos} capítulos · ${escapeHtml(story.genero || 'Geral')}</span>
-                        <div class="rating-badge" aria-hidden="false" role="button" tabindex="0" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}">
-                            <span class="rating-avg">${Number(story.media_avaliacoes || 0).toFixed(1)}</span>
-                            <span class="rating-count">(${Number(story.total_avaliacoes || 0)})</span>
-                        </div>
+                <div class="rating-badge" aria-hidden="false" role="button" tabindex="0" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}">
+                    <span class="rating-avg">${Number(story.media_avaliacoes || 0).toFixed(1)}</span>
+                    <span class="rating-count">(${Number(story.total_avaliacoes || 0)})</span>
+                </div>
             </div>
         </article>
     `;
@@ -1006,6 +1237,52 @@ async function recarregarHistoriasComTratamento() {
     } catch (error) {
         handleError(error);
     }
+}
+
+function obterHistoriaPorIdLocal(storyId) {
+    const colecoes = [
+        ...(state.catalogo || []),
+        ...(state.minhasHistorias || []),
+        ...((state.painel?.leitura?.progresso || []).map((item) => item.historia).filter(Boolean)),
+        ...((state.painel?.leitura?.recomendacoes || []).filter(Boolean)),
+    ];
+
+    if (state.historiaDetalhe) {
+        colecoes.push(state.historiaDetalhe);
+    }
+
+    const categorias = state.biblioteca?.categorias || {};
+    for (const lista of Object.values(categorias)) {
+        if (Array.isArray(lista)) {
+            colecoes.push(...lista);
+        }
+    }
+
+    return colecoes.find((story) => story && story.id === storyId) || null;
+}
+
+async function abrirHistoriaNoLeitor(storyId) {
+    const historiaLocal = obterHistoriaPorIdLocal(storyId);
+    let chapterId = historiaLocal?.progresso_leitor?.capitulo_id || historiaLocal?.capitulo_inicial_id;
+
+    if (!chapterId) {
+        const detalhe = await api(`/me/historias/${encodeURIComponent(storyId)}`);
+        const historia = detalhe.historia;
+        chapterId = historia?.progresso_leitor?.capitulo_id
+            || historia?.capitulo_inicial_id
+            || historia?.capitulos?.[0]?.id;
+        if (state.page === 'historias') {
+            state.historiaDetalhe = historia;
+            renderDetalheHistoria();
+        }
+    }
+
+    if (!chapterId) {
+        showToast('Esta história ainda não possui capítulo para leitura.', true);
+        return;
+    }
+
+    await abrirCapitulo(storyId, chapterId);
 }
 
 async function handleStoryActionClick(event) {
@@ -1032,12 +1309,12 @@ async function handleStoryActionClick(event) {
         }
 
         if (action === 'nova-historia') {
-            abrirEditorAutoria();
+            abrirEditorAutoria(null, {screen: 'book'});
             return;
         }
 
         if (action === 'abrir-historia') {
-            window.location.href = `/app/historias?story=${encodeURIComponent(storyId)}`;
+            await abrirHistoriaNoLeitor(storyId);
             return;
         }
 
@@ -1051,7 +1328,7 @@ async function handleStoryActionClick(event) {
         }
 
         if (action === 'selecionar-escrita') {
-            abrirEditorAutoria(storyId);
+            abrirEditorAutoria(storyId, {screen: 'chapters'});
             return;
         }
 
@@ -1077,9 +1354,12 @@ async function handleStoryActionClick(event) {
             return;
         }
 
-        if (action === 'avaliar-historia-range') {
-            const range = document.getElementById('story-rating-range');
-            const nota = Number(range?.value || 0);
+        if (action === 'avaliar-sentimento') {
+            const nota = sentimentoParaNota(button.dataset.sentimentoVoto);
+            if (!nota) {
+                showToast('Avaliação inválida.', true);
+                return;
+            }
             await avaliarHistoria(storyId, nota);
             return;
         }
@@ -1115,6 +1395,8 @@ async function publicarHistoria(event) {
                 return;
             }
             payload.capa = await lerArquivoComoDataURL(coverFile);
+        } else if (!editando && state.writer.autoCoverFromEpub) {
+            payload.capa = state.writer.autoCoverFromEpub;
         }
         // suporte a EPUB e preview (MOV/MP4)
         const epubFile = el.storyFileInput?.files?.[0];
@@ -1149,16 +1431,29 @@ async function publicarHistoria(event) {
             ? `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}`
             : '/me/autoria/historias';
         const response = await api(endpoint, {method: editando ? 'PUT' : 'POST', body: payload});
-        showToast(response.mensagem || (editando ? 'Livro atualizado com sucesso.' : 'História publicada com sucesso.'));
+        const criadoViaEpub = Boolean(response.tem_epub || payload.epub);
         el.formNovaHistoria.reset();
         if (el.storyCoverInput) {
             el.storyCoverInput.value = '';
         }
+        if (el.storyFileInput) {
+            el.storyFileInput.value = '';
+        }
+        state.writer.autoCoverFromEpub = null;
+        state.writer.epubMetadata = null;
+        atualizarPreviewCapa(null);
         await carregarAutoria();
         state.autoriaSelecionadaId = response.historia?.id || response.id || payload.historia_id || null;
         state.capituloEditandoId = null;
         renderEscrever();
-        abrirEditorAutoria(state.autoriaSelecionadaId);
+        abrirEditorAutoria(state.autoriaSelecionadaId, {screen: 'chapters'});
+        if (editando) {
+            showToast(response.mensagem || 'Livro atualizado com sucesso.');
+        } else if (criadoViaEpub) {
+            showToast('Livro criado por EPUB. Capítulos importados e liberados apenas para edição.');
+        } else {
+            showToast('Livro criado. Agora vá para a tela de capítulos para começar a escrever.');
+        }
     } catch (error) {
         handleError(error);
     }
@@ -1173,6 +1468,11 @@ async function publicarCapitulo(event) {
     }
     try {
         const editando = Boolean(payload.capitulo_id);
+        const historiaSelecionada = (state.minhasHistorias || []).find((story) => story.id === payload.historia_id);
+        if (!editando && historiaSelecionada && ehLivroImportadoPorEpub(historiaSelecionada)) {
+            showToast('Livro importado por EPUB permite apenas edição dos capítulos existentes.', true);
+            return;
+        }
         const endpoint = editando
             ? `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}/capitulos/${encodeURIComponent(payload.capitulo_id)}`
             : `/me/autoria/historias/${encodeURIComponent(payload.historia_id)}/capitulos`;
@@ -1235,6 +1535,7 @@ async function avaliarHistoria(storyId, nota) {
         if (idx >= 0) {
             state.catalogo[idx].media_avaliacoes = media;
             state.catalogo[idx].total_avaliacoes = total;
+            state.catalogo[idx].minha_avaliacao = nota;
         }
 
         // animate micro-feedback badge on the card if present
@@ -2402,58 +2703,15 @@ function corNomeUsuario(nome) {
 }
 
 function atualizarSeletorAvaliacao(nota, options = {}) {
-    const preview = Boolean(options.preview);
     const valor = Math.max(1, Math.min(5, Number(nota || 1)));
-    const range = document.getElementById('story-rating-range');
-    const starsEl = document.getElementById('story-rating-stars');
-    const valueEl = document.getElementById('story-rating-value');
-    const starsPick = document.querySelectorAll('.hover-star');
-    const hoverBox = document.getElementById('story-rating-hover');
-
-    if (!preview && range) {
-        range.value = String(valor);
-    }
-    if (starsEl) {
-        starsEl.textContent = renderStarsText(valor);
-    }
-    if (valueEl) {
-        valueEl.textContent = String(valor);
-    }
-
-    starsPick.forEach((elStar) => {
-        const current = Number(elStar.dataset.hoverStar || 0);
-        elStar.classList.toggle('is-active', current <= valor);
+    const sentimento = notaParaSentimento(valor);
+    const botoesSentimento = document.querySelectorAll('[data-sentimento-voto]');
+    botoesSentimento.forEach((botao) => {
+        botao.classList.toggle('is-active', botao.dataset.sentimentoVoto === sentimento);
     });
-
-    if (!preview && hoverBox) {
-        hoverBox.dataset.ratingSelected = String(valor);
+    if (!options.preview && state.historiaDetalhe) {
+        state.historiaDetalhe.minha_avaliacao = valor;
     }
-}
-
-function handleRatingHover(event) {
-    const hoverStar = event.target.closest('[data-hover-star]');
-    if (!hoverStar) {
-        return;
-    }
-    const nota = Number(hoverStar.dataset.hoverStar || 1);
-    atualizarSeletorAvaliacao(nota, {preview: true});
-}
-
-function handleRatingHoverOut(event) {
-    const hoverBox = event.target.closest('#story-rating-hover');
-    if (!hoverBox) {
-        return;
-    }
-    if (event.relatedTarget && hoverBox.contains(event.relatedTarget)) {
-        return;
-    }
-    const notaSelecionada = Number(hoverBox.dataset.ratingSelected || 5);
-    atualizarSeletorAvaliacao(notaSelecionada);
-}
-
-function renderStarsText(nota) {
-    const valor = Math.max(1, Math.min(5, Number(nota || 1)));
-    return `${'★'.repeat(valor)}${'☆'.repeat(5 - valor)}`;
 }
 
 function escapeHtml(value) {

@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>StoryFlow | {{ pagina|capitalize }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/write-modal.css') }}">
 </head>
 <body class="app-body" data-page="{{ pagina }}">
     <div class="app-layout">
@@ -59,8 +58,6 @@
         <div class="main-shell">
             <header class="main-topbar">
                 <div>
-                <script src="/static/js/write-modal.js"></script>
-                <script src="/static/js/write-modal-integration.js"></script>
                     <h1><span id="header-user-name">Usuário</span></h1>
                 </div>
                 <div class="topbar-actions">
@@ -246,103 +243,93 @@
                                 stroke-linecap="round" stroke-linejoin="round" />
                         </svg>
                     </div>
-                    <h2 id="writer-editor-title">Criar história</h2>
+                    <div>
+                        <h2 id="writer-editor-title">Novo livro</h2>
+                        <p id="writer-editor-mode" class="muted">Tela 1 de 2: livro</p>
                     </div>
-                    <button id="writer-editor-close" class="writer-editor-close modal-close" type="button"
-                        aria-label="Fechar editor">×</button>
-                    </header>
+                </div>
+                <div class="writer-screen-tabs" role="tablist" aria-label="Fluxo de criação">
+                    <button id="writer-screen-book-btn" class="writer-screen-tab is-active" data-writer-screen="book" type="button" role="tab"
+                        aria-selected="true">Livro</button>
+                    <button id="writer-screen-chapters-btn" class="writer-screen-tab" data-writer-screen="chapters" type="button" role="tab"
+                        aria-selected="false">Capítulos</button>
+                </div>
+                <button id="writer-editor-close" class="writer-editor-close modal-close" type="button" aria-label="Fechar editor">×</button>
+            </header>
 
-            <div class="modal-body writer-editor-grid">
-                <aside class="left-col">
-                    <section class="step">
-                        <div class="step-head"><span class="step-num">1</span>
-                            <div class="step-meta">(Obrigatório) Capa e Título</div>
-                        </div>
-                        <form id="nova-historia-form" class="form-stack">
-                            <input id="historia-edit-id" type="hidden" name="historia_id" value="">
-                            <label class="upload-area" for="story-cover-input" aria-label="Adicionar Capa da História (obrigatório)">
-                                <div class="upload-inner">Adicionar Capa da História (obrigatório)
-                                    <div class="upload-hint">Arraste aqui ou clique para selecionar</div>
-                                </div>
-                                <input id="story-cover-input" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden">
-                            </label>
-                            <label class="field" style="margin-top:8px">
-                                <span class="field-label">Importar EPUB (opcional)</span>
-                                <input id="story-file-input" type="file" accept=".epub,application/epub+zip" class=""> 
-                                <small class="muted">Enviar um arquivo .epub importará metadados (capa, título, capítulos).</small>
-                            </label>
-                            <label class="field" style="margin-top:8px">
-                                <span class="field-label">Preview (MOV/MP4) (opcional)</span>
-                                <input id="story-preview-input" type="file" accept="video/quicktime,video/mp4" class=""> 
-                            </label>
-                            <label class="field">
-                                <span class="field-label">Título da História</span>
-                                <input type="text" name="titulo" required placeholder="Título da história">
-                            </label>
-                            <div style="margin-top:12px">
-                                <button id="historia-submit-create" type="submit" class="btn-primary">Criar livro</button>
+            <div class="modal-body writer-editor-grid writer-two-screens">
+                <section class="writer-screen writer-screen-book is-active" data-writer-screen="book">
+                    <form id="nova-historia-form" class="form-stack">
+                        <input id="historia-edit-id" type="hidden" name="historia_id" value="">
+                        <label class="upload-area" for="story-cover-input" aria-label="Adicionar capa do livro">
+                            <div class="upload-inner" id="story-cover-preview">
+                                Adicionar capa do livro
+                                <div class="upload-hint">Clique para selecionar a imagem</div>
                             </div>
-                            </form>
-                            </section>
-                            
-                            <section class="step">
-                                <div class="step-head"><span class="step-num">2</span>
-                                    <div class="step-meta">(Opcional) Sinopse</div>
-                                </div>
-                                <label class="field">
-                                    <span class="field-label">Sinopse da História (opcional)</span>
-                                    <textarea name="sinopse" id="story-synopsis" placeholder="Escreva uma sinopse curta..."></textarea>
+                            <input id="story-cover-input" type="file" accept="image/png,image/jpeg,image/webp" class="visually-hidden">
                         </label>
-                    </section>
-                    </aside>
-                    
-                    <main class="right-col">
-                        <section class="step step-right-step">
-                            <div class="step-head"><span class="step-num">2</span>
-                                <div class="step-meta">(Opcional) Sinopse</div>
-                            </div>
-                            <div class="mirror-synopsis">(continuação visual)</div>
-                    </section>
 
-                    <section class="step">
-                        <div class="step-head"><span class="step-num">3</span>
-                            <div class="step-meta">Editando Capítulo, Conteúdo do Capítulo</div>
+                        <label class="field">
+                            <span class="field-label">Upload EPUB (opcional)</span>
+                            <input id="story-file-input" type="file" accept=".epub,application/epub+zip">
+                            <small id="story-epub-meta-hint" class="muted">Se faltarem dados, o sistema usa os metadados do EPUB automaticamente.</small>
+                        </label>
+
+                        <label class="field">
+                            <span class="field-label">Preview (MOV/MP4) (opcional)</span>
+                            <input id="story-preview-input" type="file" accept="video/quicktime,video/mp4">
+                        </label>
+
+                        <label class="field">
+                            <span class="field-label">Título</span>
+                            <input id="story-title-input" type="text" name="titulo" required placeholder="Título do livro">
+                        </label>
+
+                        <label class="field">
+                            <span class="field-label">Gênero</span>
+                            <input id="story-genre-input" type="text" name="genero" placeholder="Fantasia, Romance, Mistério...">
+                        </label>
+
+                        <label class="field">
+                            <span class="field-label">Sinopse</span>
+                            <textarea name="sinopse" id="story-synopsis" required placeholder="Escreva uma sinopse curta..."></textarea>
+                        </label>
+
+                        <div class="writer-screen-actions">
+                            <button id="historia-submit" type="submit" class="btn-primary">Criar livro</button>
                         </div>
-                        <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
-                            <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
-                            <label class="field">
-                                <span class="field-label">Título do Capítulo</span>
-                                <input id="chapter-title" type="text" name="titulo" required placeholder="Título do capítulo">
-                            </label>
-                            <div class="editor">
-                                <div class="toolbar" role="toolbar" aria-label="Barra de ferramentas de edição">
-                                    <button class="tb-btn" type="button" data-cmd="bold" title="Negrito"><strong>B</strong></button>
-                                    <button class="tb-btn" type="button" data-cmd="italic" title="Itálico"><em>I</em></button>
-                                    <button class="tb-btn" type="button" data-cmd="underline" title="Sublinhado"><u>U</u></button>
-                                    <button class="tb-btn" type="button" data-cmd="insertUnorderedList" title="Lista com marcadores">•</button>
-                                    <button class="tb-btn" type="button" data-cmd="insertOrderedList" title="Lista numerada">1.</button>
-                                    <select id="font-select" class="tb-select" title="Fonte">
-                                        <option value="serif">Serif</option>
-                                        <option value="Georgia">Georgia</option>
-                                        <option value="Times New Roman">Times</option>
-                                        <option value="sans-serif">Sans</option>
-                                    </select>
-                                    <label class="size-control">Tamanho
-                                        <input id="font-size" type="range" min="12" max="40" value="24">
-                                    </label>
-                                </div>
-                                
-                                <textarea name="conteudo" id="editor-textarea" class="editor-area"
-                                    placeholder="Escreva o capítulo aqui">Capítulo 1: O Início... algumas palavras em negrito e outras em itálico.</textarea>
-                                
-                                <div class="editor-actions">
-                                    <button id="add-chapter" class="btn-outline" type="button">Adicionar Novo Capítulo</button>
-                                    <button id="finish-chapter" class="btn-primary" type="button">Finalizar Capítulo</button>
-                                </div>
-                                </div>
-                                </form>
-                    </section>
-                </main>
+                    </form>
+                </section>
+
+                <section class="writer-screen writer-screen-chapters" data-writer-screen="chapters">
+                    <article class="writer-chapter-panel">
+                        <div class="writer-chapter-list-head">
+                            <div>
+                                <h3 id="capitulo-form-title">Capítulos</h3>
+                                <p id="capitulo-form-hint" class="muted">Crie e edite os capítulos do seu livro.</p>
+                            </div>
+                        </div>
+                        <div id="writer-modal-chapters-list" class="writer-chapter-list"></div>
+                    </article>
+
+                    <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
+                        <input id="capitulo-historia-id" type="hidden" name="historia_id" value="">
+                        <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
+                        <label class="field">
+                            <span class="field-label">Título do capítulo</span>
+                            <input id="chapter-title" type="text" name="titulo" required placeholder="Título do capítulo">
+                        </label>
+                        <label class="field">
+                            <span class="field-label">Conteúdo</span>
+                            <textarea name="conteudo" id="editor-textarea" class="editor-area"
+                                placeholder="Escreva o capítulo aqui..."></textarea>
+                        </label>
+                        <div class="writer-screen-actions">
+                            <button id="capitulo-edit-cancel" class="btn-ghost hidden" type="button">Cancelar edição</button>
+                            <button id="capitulo-submit" class="btn-primary" type="submit">Adicionar capítulo</button>
+                        </div>
+                    </form>
+                </section>
             </div>
         </article>
     </section>
@@ -419,16 +406,19 @@
                                 <p class="reader-setting-title">Fundo</p>
                                 <div id="reader-bg-options" class="reader-option-grid reader-bg-options">
                                     <button class="reader-option-card reader-bg-card" data-reader-bg="paper_yellow" type="button" aria-pressed="false">
-                                        <span class="reader-bg-swatch swatch-paper_yellow"></span>
+                                        <span class="reader-bg-swatch swatch-paper_yellow">•</span>
                                     </button>
                                     <button class="reader-option-card reader-bg-card" data-reader-bg="cream" type="button" aria-pressed="false">
-                                        <span class="reader-bg-swatch swatch-cream"></span>
+                                        <span class="reader-bg-swatch swatch-cream">•</span>
                                     </button>
                                     <button class="reader-option-card reader-bg-card" data-reader-bg="off_white" type="button" aria-pressed="false">
-                                        <span class="reader-bg-swatch swatch-off_white"></span>
+                                        <span class="reader-bg-swatch swatch-off_white">•</span>
                                     </button>
                                     <button class="reader-option-card reader-bg-card" data-reader-bg="sepia_dark" type="button" aria-pressed="false">
-                                        <span class="reader-bg-swatch swatch-sepia_dark"></span>
+                                        <span class="reader-bg-swatch swatch-sepia_dark">•</span>
+                                    </button>
+                                    <button class="reader-option-card reader-bg-card" data-reader-bg="site_night" type="button" aria-pressed="false">
+                                        <span class="reader-bg-swatch swatch-site_night">•</span>
                                     </button>
                                 </div>
                             </div>

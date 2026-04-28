@@ -557,6 +557,17 @@ def me_autoria_historias():
     return resposta_api(resultado)
 
 
+@app.route('/api/me/autoria/epub-metadata', methods=['POST'])
+@require_auth
+def me_autoria_epub_metadata():
+    dados = obter_json_requisicao()
+    resultado = UsuarioController.consultar_metadados_epub_por_token(
+        g.auth_token,
+        dados.get('epub'),
+    )
+    return resposta_api(resultado, 200 if resultado.get('sucesso') else 400)
+
+
 @app.route('/api/me/autoria/historias', methods=['POST'])
 @require_auth
 def me_autoria_publicar():
