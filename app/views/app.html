@@ -351,16 +351,15 @@
             <div id="reader-modal-backdrop" class="reader-backdrop"></div>
             <article class="reader-card">
                 <div class="reader-head">
-                    <button id="reader-close" class="reader-store-back" type="button" aria-label="Voltar à loja">
-                        <span aria-hidden="true">‹</span>
+                    <button id="reader-close" class="reader-store-back" type="button" aria-label="Fechar leitura">
+                        <span aria-hidden="true">×</span>
                     </button>
                     <div class="reader-titlebar">
                         <p id="reader-story-name" class="reader-story-name">Leitura</p>
                         <h2 id="reader-book-title-top" class="reader-book-title-top"></h2>
                     </div>
                 <div class="reader-head-actions" aria-label="Ferramentas de leitura">
-                    <button id="reader-show-toc" class="reader-icon-btn is-active" type="button" aria-label="Abrir sumário">☷</button>
-                    <button class="reader-icon-btn" type="button" aria-label="Pesquisar">⌕</button>
+                    <button id="reader-show-toc" class="reader-icon-btn" type="button" aria-label="Abrir sumário">☷</button>
                     <button id="reader-show-settings" class="reader-icon-btn reader-aa-btn" type="button"
                         aria-label="Ajustar fonte">Aa</button>
                 </div>
@@ -376,7 +375,7 @@
                     </div>
                 </section>
                 
-                <aside id="reader-side-panel" class="reader-side-panel" data-panel="toc">
+                <aside id="reader-side-panel" class="reader-side-panel is-collapsed" data-panel="settings">
                     <button id="reader-panel-close" class="reader-panel-close" type="button" aria-label="Fechar painel">×</button>
                 
                     <section class="reader-panel-section reader-panel-toc">
@@ -440,7 +439,33 @@
                         <button id="reader-highlight" class="reader-tool-btn" type="button">Destacar seleção</button>
                         <p id="reader-meta" class="muted">Capítulo</p>
                         <p id="reader-predicted" class="muted">Tempo previsto: <strong id="reader-predicted-value">0:00</strong></p>
+                        <div class="reader-reading-time">
+                            <article class="time-display">
+                                <span class="time-label">Página</span>
+                                <strong id="reader-page-time" class="time-value">0:00</strong>
+                            </article>
+                            <article class="time-display">
+                                <span class="time-label">Capítulo</span>
+                                <strong id="reader-chapter-time" class="time-value">0:00</strong>
+                            </article>
+                            <article class="time-display">
+                                <span class="time-label">Livro</span>
+                                <strong id="reader-book-time" class="time-value">0:00</strong>
+                            </article>
+                            <article class="time-display">
+                                <span class="time-label">Sessão</span>
+                                <strong id="reader-session-time" class="time-value">0:00</strong>
+                            </article>
+                        </div>
                     </div>
+
+                    <section class="reader-session-block">
+                        <div class="reader-session-head">
+                            <h4>Sessões</h4>
+                            <span id="reader-sessions-count" class="chip">0</span>
+                        </div>
+                        <div id="reader-sessions-list" class="reader-sessions-list"></div>
+                    </section>
 
                     <details class="reader-marks-block">
                         <summary>
@@ -450,7 +475,7 @@
                         <div id="reader-marks-list" class="reader-marks-list"></div>
                     </details>
 
-                    <details class="comment-block">
+                    <details class="comment-block is-secondary">
                         <summary>
                             <span>Comentários</span>
                             <span id="reader-comments-count" class="chip">0</span>

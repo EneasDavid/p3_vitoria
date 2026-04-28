@@ -435,6 +435,7 @@ class UsuarioController:
         capitulo_id: str,
         pagina_global: int,
         segundos: int,
+        sessao_id: str | None = None,
     ) -> dict:
         """Registra tempo de leitura acumulado para a conta logada."""
         contexto = UsuarioController._obter_contexto_autenticado(token)
@@ -449,7 +450,13 @@ class UsuarioController:
         if not HistoriaController._buscar_capitulo(historia, capitulo_id):
             return {'sucesso': False, 'erro': 'Capítulo não encontrado', 'codigo': 404}
 
-        tempo = leitor.registrar_tempo_leitura(historia_id, capitulo_id, pagina_global, segundos)
+        tempo = leitor.registrar_tempo_leitura(
+            historia_id,
+            capitulo_id,
+            pagina_global,
+            segundos,
+            sessao_id=sessao_id,
+        )
         return {
             'sucesso': True,
             'mensagem': 'Tempo de leitura registrado.',

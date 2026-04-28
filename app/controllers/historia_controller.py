@@ -197,131 +197,12 @@ class HistoriaController:
             sinopse = HistoriaController._limpar_texto(sinopse)
             genero = HistoriaController._limpar_texto(genero)
             usuario_id = HistoriaController._limpar_texto(usuario_id)
-            # Prepare to optionally extract metadata from EPUB before strict validation
-            epub_parsed_chapters = []
-            epub_meta_title = None
-            epub_meta_description = None
-            epub_meta_subject = None
-            epub_meta_cover_dataurl = None
-
-            if epub_data and isinstance(epub_data, str) and epub_data.strip():
-                # quick size check on the payload string
-                if len(epub_data) > 20_000_000:
-                    return {'sucesso': False, 'erro': 'EPUB muito grande. Limite de 20MB.', 'codigo': 400}
-                try:
-                    if ',' in epub_data:
-                        _, b64 = epub_data.split(',', 1)
-                    else:
-                        b64 = epub_data
-                    raw = base64.b64decode(b64)
-                    book = epub.read_epub(io.BytesIO(raw))
-
-                    # metadata: DC title, description, subject
-                    try:
-                        titles = book.get_metadata('DC', 'title') or []
-                        if titles:
-                            epub_meta_title = titles[0][0]
-                    except Exception:
-                        epub_meta_title = None
-                    try:
-                        descs = book.get_metadata('DC', 'description') or []
-                        if descs:
-                            epub_meta_description = descs[0][0]
-                    except Exception:
-                        epub_meta_description = None
-                    try:
-                        subjects = book.get_metadata('DC', 'subject') or []
-                        if subjects:
-                            epub_meta_subject = subjects[0][0]
-                    except Exception:
-                        epub_meta_subject = None
-
-                    # try to find a cover image item
-                    cover_item = None
-                    for it in book.get_items():
-                        try:
-                            mt = getattr(it, 'media_type', '') or ''
-                        except Exception:
-                            mt = ''
-                        name = getattr(it, 'id', '') or getattr(it, 'file_name', '') or ''
-                        lname = str(name).lower()
-                        if mt.startswith('image/') and ('cover' in lname or 'capa' in lname or 'cover' in str(it.get_name()).lower()):
-                            cover_item = it
-                            break
-                    # fallback: first image
-                    if not cover_item:
-                        for it in book.get_items():
-                            try:
-                                mt = getattr(it, 'media_type', '') or ''
-                            except Exception:
-                                mt = ''
-                            if mt.startswith('image/'):
-                                cover_item = it
-                                break
-
-                    if cover_item is not None:
-                        try:
-                            img_bytes = cover_item.get_content()
-                            img_type = getattr(cover_item, 'media_type', 'image/jpeg')
-                            epub_meta_cover_dataurl = f"data:{img_type};base64,{base64.b64encode(img_bytes).decode('ascii')}"
-                        except Exception:
-                            epub_meta_cover_dataurl = None
-
-                    # build spine-ordered chapters
-                    ordem = 1
-                    spine_ids = [item[0] if isinstance(item, (list, tuple)) else item for item in getattr(book, 'spine', [])]
-                    if not spine_ids:
-                        spine_items = [i for i in book.get_items() if i.get_type() == epub.EpubHtml]
-                    else:
-                        spine_items = []
-                        for idref in spine_ids:
-                            try:
-                                it = book.get_item_with_id(idref)
-                                if it is not None:
-                                    spine_items.append(it)
-                            except Exception:
-                                continue
-
-                    for item in spine_items:
-                        try:
-                            content_bytes = item.get_content()
-                            text = content_bytes.decode('utf-8', errors='ignore')
-                        except Exception:
-                            continue
-                        try:
-                            soup = BeautifulSoup(text, 'lxml')
-                        except Exception:
-                            soup = BeautifulSoup(text, 'html.parser')
-                        heading = soup.find(['h1', 'h2', 'h3'])
-                        if heading and heading.get_text(strip=True):
-                            title_ch = unescape(heading.get_text(strip=True))
-                        else:
-                            meta_title_ch = None
-                            if soup.title and soup.title.string:
-                                meta_title_ch = soup.title.string.strip()
-                            title_ch = unescape(meta_title_ch) if meta_title_ch else f'Capítulo {ordem}'
-                        plain = soup.get_text(separator='\n')
-                        plain = unescape(plain)
-                        plain = re.sub(r'\s+', ' ', plain).strip()
-                        epub_parsed_chapters.append((title_ch, plain))
-                        ordem += 1
-                except Exception as e:
-                    return {'sucesso': False, 'erro': f'Erro ao processar EPUB: {str(e)}', 'codigo': 400}
-
-            # apply epub metadata as defaults if caller didn't provide
-            titulo = titulo or (epub_meta_title or '')
-            sinopse = sinopse or (epub_meta_description or '')
-            genero = genero or (epub_meta_subject or '')
-
-            capa_ok, capa_normalizada, capa_erro = HistoriaController._validar_capa(capa or epub_meta_cover_dataurl)
+            capa_ok, capa_normalizada, capa_erro = HistoriaController._validar_capa(capa)
 
             if not titulo:
                 return {'sucesso': False, 'erro': 'Título é obrigatório', 'codigo': 400}
             if not sinopse:
-                # sinopse optional now if chapters present
-                if not epub_parsed_chapters:
-                    return {'sucesso': False, 'erro': 'Sinopse é obrigatória', 'codigo': 400}
-                # else allow empty sinopse
+                return {'sucesso': False, 'erro': 'Sinopse é obrigatória', 'codigo': 400}
             if not usuario_id:
                 return {'sucesso': False, 'erro': 'Autor é obrigatório', 'codigo': 400}
             if not capa_ok:
@@ -763,7 +644,7 @@ class HistoriaController:
         usuario = usuarios_db.get(usuario_id) if usuario_id else None
         if usuario:
             historia.adicionar_leitor(usuario)
-        tempo_leitura = usuario.obter_tempo_leitura(historia.id) if isinstance(usuario, Leitor) else {'total_segundos': 0, 'capitulos': {}}
+        tempo_leitura = usuario.obter_tempo_leitura(historia.id) if isinstance(usuario, Leitor) else {'total_segundos': 0, 'capitulos': {}, 'sessoes': {}}
 
         indice_atual = historia.capitulos.index(capitulo)
         anterior = historia.capitulos[indice_atual - 1] if indice_atual > 0 else None

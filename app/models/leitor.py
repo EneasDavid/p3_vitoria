@@ -3,6 +3,7 @@ Módulo de Leitor - Subtipo de usuário especializado em leitura.
 Implementa: Herança de Usuario, Polimorfismo em exibir_painel().
 """
 import uuid
+from datetime import datetime
 from typing import List
 from .usuario import Usuario
 from .biblioteca import Biblioteca
@@ -101,6 +102,7 @@ class Leitor(Usuario):
         capitulo_id: str,
         pagina_global: int,
         segundos: int,
+        sessao_id: str | None = None,
     ) -> dict:
         """Acumula tempo de leitura por página, capítulo e história."""
         try:
@@ -116,7 +118,11 @@ class Leitor(Usuario):
         historia = self.sessoes_leitura.setdefault(historia_id, {
             'total_segundos': 0,
             'capitulos': {},
+            'sessoes': {},
         })
+        historia.setdefault('capitulos', {})
+        historia.setdefault('sessoes', {})
+
         capitulo = historia['capitulos'].setdefault(capitulo_id, {
             'total_segundos': 0,
             'paginas': {},
@@ -125,12 +131,29 @@ class Leitor(Usuario):
         capitulo['paginas'][pagina_chave] = capitulo['paginas'].get(pagina_chave, 0) + segundos
         capitulo['total_segundos'] += segundos
         historia['total_segundos'] += segundos
+
+        sessao_normalizada = str(sessao_id or '').strip()
+        if sessao_normalizada:
+            agora = datetime.now().isoformat()
+            sessao = historia['sessoes'].setdefault(sessao_normalizada, {
+                'id': sessao_normalizada,
+                'iniciada_em': agora,
+                'atualizada_em': agora,
+                'total_segundos': 0,
+                'capitulos': {},
+                'paginas': {},
+            })
+            sessao['atualizada_em'] = agora
+            sessao['total_segundos'] = int(sessao.get('total_segundos', 0)) + segundos
+            sessao['capitulos'][capitulo_id] = int(sessao['capitulos'].get(capitulo_id, 0)) + segundos
+            sessao['paginas'][pagina_chave] = int(sessao['paginas'].get(pagina_chave, 0)) + segundos
+
         return self.obter_tempo_leitura(historia_id)
 
     def obter_tempo_leitura(self, historia_id: str | None = None) -> dict:
         """Retorna o tempo acumulado de leitura."""
         if historia_id:
-            return self.sessoes_leitura.get(historia_id, {'total_segundos': 0, 'capitulos': {}})
+            return self.sessoes_leitura.get(historia_id, {'total_segundos': 0, 'capitulos': {}, 'sessoes': {}})
         return self.sessoes_leitura
 
     def obter_avaliacoes(self) -> List['Avaliacao']:

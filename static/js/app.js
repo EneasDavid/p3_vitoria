@@ -24,6 +24,7 @@ const state = {
         currentGlobalPage: 1,
     },
     readerSession: {
+        id: null,
         startedAt: null,
         pageStartedAt: null,
         intervalId: null,
@@ -157,6 +158,8 @@ function cacheElements() {
     el.readerCommentInput = document.getElementById('reader-comment-input');
     el.readerMarksCount = document.getElementById('reader-marks-count');
     el.readerMarksList = document.getElementById('reader-marks-list');
+    el.readerSessionsCount = document.getElementById('reader-sessions-count');
+    el.readerSessionsList = document.getElementById('reader-sessions-list');
 }
 
 function bindGlobalEvents() {
@@ -264,6 +267,10 @@ function bindGlobalEvents() {
     el.readerShowSettings?.addEventListener('click', () => alternarPainelLeitor('settings'));
     el.readerPanelClose?.addEventListener('click', () => {
         el.readerSidePanel?.classList.toggle('is-collapsed');
+        if (el.readerSidePanel?.classList.contains('is-collapsed')) {
+            el.readerShowToc?.classList.remove('is-active');
+            el.readerShowSettings?.classList.remove('is-active');
+        }
     });
     el.readerSampleClose?.addEventListener('click', () => {
         el.readerSampleBanner?.classList.add('hidden');
@@ -966,8 +973,9 @@ function renderVoce() {
 }
 
 function renderStoryCard(story) {
+    const cardClass = state.page === 'inicio' ? 'story-home-card' : '';
     return `
-        <article class="writer-book-card ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}" data-story-id="${escapeAttribute(story.id)}">
+        <article class="writer-book-card ${cardClass} ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}" data-story-id="${escapeAttribute(story.id)}">
             <button class="writer-book-cover" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}" type="button" aria-label="Abrir ${escapeAttribute(story.titulo)}">
                 ${renderStoryCover(story)}
             </button>
@@ -1288,6 +1296,7 @@ function renderModalLeitura(paginaInicial = 'manter') {
         return;
     }
     const {historia, capitulo} = state.capituloAtivo;
+    definirPainelLeitorInicial();
     if (el.readerStoryName) {
         el.readerStoryName.textContent = `${historia.titulo} · ${historia.autor || 'Autor'}`;
     }
@@ -1325,6 +1334,8 @@ function renderModalLeitura(paginaInicial = 'manter') {
     }
 
     renderMarcacoesLeitor();
+    renderSessoesLeitura();
+    atualizarTempoPrevisto();
     atualizarTempoLeituraUI();
 }
 
@@ -1358,6 +1369,16 @@ function alternarPainelLeitor(panel) {
     el.readerSidePanel.classList.remove('is-collapsed');
     el.readerShowToc?.classList.toggle('is-active', panel === 'toc');
     el.readerShowSettings?.classList.toggle('is-active', panel === 'settings');
+}
+
+function definirPainelLeitorInicial() {
+    if (!el.readerSidePanel) {
+        return;
+    }
+    el.readerSidePanel.dataset.panel = 'settings';
+    el.readerSidePanel.classList.add('is-collapsed');
+    el.readerShowToc?.classList.remove('is-active');
+    el.readerShowSettings?.classList.remove('is-active');
 }
 
 function aplicarPaginacaoCapitulo(paginaInicial = 'manter') {
@@ -1738,6 +1759,9 @@ function aplicarPreferenciasVisuaisLeitor() {
 
 function iniciarSessaoLeitura() {
     const agora = Date.now();
+    if (!state.readerSession.id) {
+        state.readerSession.id = `sessao-${agora}-${Math.random().toString(36).slice(2, 10)}`;
+    }
     if (!state.readerSession.startedAt) {
         state.readerSession.startedAt = agora;
     }
@@ -1783,6 +1807,78 @@ function obterTempoLivroAtual() {
     return Number(tempo?.total_segundos || 0);
 }
 
+function obterSessoesLivroAtual() {
+    const tempo = state.capituloAtivo?.tempo_leitura || state.capituloAtivo?.historia?.tempo_leitura;
+    const sessoes = tempo?.sessoes;
+    if (!sessoes || typeof sessoes !== 'object') {
+        return [];
+    }
+    return Object.values(sessoes)
+        .filter((sessao) => sessao && typeof sessao === 'object')
+        .sort((a, b) => String(b.atualizada_em || '').localeCompare(String(a.atualizada_em || '')));
+}
+
+function renderSessoesLeitura() {
+    if (!el.readerSessionsList || !el.readerSessionsCount) {
+        return;
+    }
+
+    const sessoes = obterSessoesLivroAtual();
+    el.readerSessionsCount.textContent = String(sessoes.length);
+
+    if (!sessoes.length) {
+        el.readerSessionsList.innerHTML = '<p class="placeholder">As sessões de leitura do livro aparecem aqui.</p>';
+        return;
+    }
+
+    el.readerSessionsList.innerHTML = sessoes.slice(0, 6).map((sessao) => {
+        const horario = formatarHorarioSessao(sessao.atualizada_em || sessao.iniciada_em);
+        return `
+            <article class="reader-session-item">
+                <strong>${formatarTempo(sessao.total_segundos || 0)}</strong>
+                <span>${escapeHtml(horario)}</span>
+            </article>
+        `;
+    }).join('');
+}
+
+function formatarHorarioSessao(isoString) {
+    if (!isoString) {
+        return 'Agora';
+    }
+    const data = new Date(isoString);
+    if (Number.isNaN(data.getTime())) {
+        return 'Agora';
+    }
+    return data.toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+    });
+}
+
+function atualizarTempoPrevisto() {
+    if (!el.readerPredictedValue) {
+        return;
+    }
+    const totalPaginas = Math.max(1, state.readerPagination.pages.length || 1);
+    const paginaAtual = Math.max(1, (state.readerPagination.currentPage || 0) + 1);
+    const restantes = Math.max(0, totalPaginas - paginaAtual);
+
+    const tempoEstimadoCapitulo = Number(state.capituloAtivo?.capitulo?.tempo_estimado_minutos || 0) * 60;
+    let mediaPorPagina = tempoEstimadoCapitulo
+        ? Math.max(25, Math.round(tempoEstimadoCapitulo / totalPaginas))
+        : 45;
+
+    const tempoRealCapitulo = obterTempoCapituloAtual();
+    if (tempoRealCapitulo > 0) {
+        mediaPorPagina = Math.max(20, Math.round(tempoRealCapitulo / paginaAtual));
+    }
+
+    el.readerPredictedValue.textContent = formatarTempo(restantes * mediaPorPagina);
+}
+
 function atualizarTempoLeituraUI() {
     const paginaSegundos = segundosDesde(state.readerSession.pageStartedAt);
     const sessaoSegundos = segundosDesde(state.readerSession.startedAt);
@@ -1798,6 +1894,7 @@ function atualizarTempoLeituraUI() {
     if (el.readerBookTime) {
         el.readerBookTime.textContent = formatarTempo(obterTempoLivroAtual() + paginaSegundos);
     }
+    atualizarTempoPrevisto();
 }
 
 async function registrarTempoLeituraAtual() {
@@ -1819,11 +1916,13 @@ async function registrarTempoLeituraAtual() {
                 capitulo_id: state.capituloAtivo.capitulo.id,
                 pagina_global: state.readerPagination.currentGlobalPage || 1,
                 segundos,
+                sessao_id: state.readerSession.id,
             },
         });
         if (response.tempo_leitura) {
             state.capituloAtivo.tempo_leitura = response.tempo_leitura;
         }
+        renderSessoesLeitura();
         atualizarTempoLeituraUI();
     } catch (error) {
         state.readerSession.unsentSeconds += segundos;
@@ -1835,6 +1934,12 @@ async function destacarSelecaoAtual() {
         return;
     }
     const selection = window.getSelection();
+    const range = selection && selection.rangeCount ? selection.getRangeAt(0) : null;
+    const origemValida = range && el.readerContent?.contains(range.commonAncestorContainer);
+    if (!origemValida) {
+        showToast('Selecione um trecho dentro da página de leitura.', true);
+        return;
+    }
     const trecho = selection ? String(selection.toString()).trim() : '';
     if (!trecho) {
         showToast('Selecione um trecho da página para destacar.', true);
@@ -1897,12 +2002,14 @@ async function fecharLeitor() {
         window.clearInterval(state.readerSession.autoSaveIntervalId);
     }
     state.readerSession = {
+        id: null,
         startedAt: null,
         pageStartedAt: null,
         intervalId: null,
         autoSaveIntervalId: null,
         unsentSeconds: 0,
     };
+    definirPainelLeitorInicial();
     el.readerModal?.classList.add('hidden');
     el.readerModal?.setAttribute('aria-hidden', 'true');
 }

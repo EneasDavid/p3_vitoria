@@ -33,7 +33,6 @@ def obter_json_requisicao() -> dict:
     dados = request.get_json(silent=True)
     return dados if isinstance(dados, dict) else {}
 
-
 def resposta_api(resultado: dict, codigo_sucesso: int = 200):
     """Converte o retorno dos controllers em uma resposta HTTP consistente."""
     corpo = dict(resultado)
@@ -74,6 +73,8 @@ def garantir_historia(titulo: str, sinopse: str, genero: str, autor_id: str):
 
 def garantir_capitulo(historia, titulo: str, conteudo: str):
     """Cria um capítulo apenas se ele ainda não existir."""
+    if historia is None:
+        return None
     for capitulo in historia.capitulos:
         if capitulo.titulo == titulo:
             return capitulo
@@ -543,6 +544,7 @@ def me_tempo_leitura():
         dados.get('capitulo_id'),
         dados.get('pagina_global'),
         dados.get('segundos'),
+        sessao_id=dados.get('sessao_id') or dados.get('session_id'),
     )
     return resposta_api(resultado, 201 if resultado['sucesso'] else 400)
 
