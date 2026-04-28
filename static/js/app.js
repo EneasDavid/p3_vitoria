@@ -3,6 +3,7 @@ const TOKEN_KEY = 'storyflow_token';
 const PAGE = window.STORYFLOW_PAGE || 'inicio';
 const READER_FONTS = new Set(['serif_classic', 'georgia', 'book', 'sans_clean']);
 const READER_BACKGROUNDS = new Set(['paper_yellow', 'cream', 'off_white', 'sepia_dark', 'site_night']);
+const READER_SPREAD_SEPARATOR = '\u001f';
 
 const state = {
     page: PAGE,
@@ -20,8 +21,10 @@ const state = {
     readerPagination: {
         pages: [],
         currentPage: 0,
-        wordsPerPage: 200,
+        wordsPerPage: 120,
+        wordsPerSpread: 240,
         currentGlobalPage: 1,
+        measurerEl: null,
     },
     readerSession: {
         id: null,
@@ -43,6 +46,7 @@ const state = {
     },
     writer: {
         screen: 'book',
+        chapterScreen: 'list',
         autoCoverFromEpub: null,
         epubMetadata: null,
     },
@@ -107,16 +111,18 @@ function cacheElements() {
     el.storyCoverPreview = document.getElementById('story-cover-preview');
     el.storyCoverInput = document.getElementById('story-cover-input');
     el.storyFileInput = document.getElementById('story-file-input');
-    el.storyPreviewInput = document.getElementById('story-preview-input');
     el.storyTitleInput = document.getElementById('story-title-input');
     el.storyGenreInput = document.getElementById('story-genre-input');
     el.storySynopsisInput = document.getElementById('story-synopsis');
     el.storyEpubMetaHint = document.getElementById('story-epub-meta-hint');
+    el.writerChapterListBtn = document.getElementById('writer-chapter-list-btn');
+    el.writerChapterEditorBtn = document.getElementById('writer-chapter-editor-btn');
     el.capituloHistoriaId = document.getElementById('capitulo-historia-id');
     el.capituloEditId = document.getElementById('capitulo-edit-id');
     el.capituloFormTitle = document.getElementById('capitulo-form-title');
     el.capituloFormHint = document.getElementById('capitulo-form-hint');
     el.capituloSubmit = document.getElementById('capitulo-submit');
+    el.capituloBackList = document.getElementById('capitulo-back-list');
     el.capituloEditCancel = document.getElementById('capitulo-edit-cancel');
     el.autoriaHistorias = document.getElementById('autoria-historias');
     el.writerAddTopButton = document.querySelector('.writer-add-book-card');
@@ -261,11 +267,14 @@ function bindGlobalEvents() {
     el.writerEditorClose?.addEventListener('click', fecharEditorAutoria);
     el.writerScreenBookBtn?.addEventListener('click', () => definirTelaEditorAutoria('book'));
     el.writerScreenChaptersBtn?.addEventListener('click', () => definirTelaEditorAutoria('chapters'));
+    el.writerChapterListBtn?.addEventListener('click', () => definirTelaCapitulos('list'));
     el.storyFileInput?.addEventListener('change', consultarMetadadosEpubSelecionado);
     el.storyCoverInput?.addEventListener('change', atualizarPreviewCapaSelecionada);
+    el.capituloBackList?.addEventListener('click', () => limparEdicaoCapitulo(true));
     el.capituloEditCancel?.addEventListener('click', () => {
         limparEdicaoCapitulo(true);
     });
+    el.formNovoCapitulo?.addEventListener('click', handleChapterFormatActionClick);
     el.capituloHistoriaId?.addEventListener('change', (event) => {
         abrirEditorAutoria(event.target.value);
         renderEscrever();
@@ -317,6 +326,7 @@ function bindGlobalEvents() {
     el.readerMarksList?.addEventListener('click', handleReaderMarksClick);
     el.readerCommentForm?.addEventListener('submit', comentarCapituloAtual);
     el.readerComments?.addEventListener('click', handleCommentActionClick);
+    window.addEventListener('resize', handleResizeLeitor);
 }
 
 async function garantirSessao() {
@@ -453,7 +463,11 @@ function renderInicioRecomendacoes() {
     if (!el.inicioRecomendacoes) {
         return;
     }
-    const recomendadas = state.painel?.leitura?.recomendacoes || [];
+    const recomendadas = (state.painel?.leitura?.recomendacoes || []).filter((story) => {
+        const semAvaliacao = Number(story?.total_avaliacoes || 0) === 0;
+        const curtida = Number(story?.minha_avaliacao || 0) >= 4;
+        return semAvaliacao || curtida;
+    });
     if (!recomendadas.length) {
         el.inicioRecomendacoes.innerHTML = `
             <h3>Recomendados para você</h3>
@@ -643,7 +657,7 @@ function renderDetalheHistoria() {
     const initialRating = (typeof story.minha_avaliacao === 'number' && story.minha_avaliacao > 0)
         ? Number(story.minha_avaliacao)
         : 4;
-    atualizarSeletorAvaliacao(initialRating);
+    atualizarSeletorAvaliacao(initialRating, {storyId: story.id});
 }
 
 function renderBiblioteca() {
@@ -773,6 +787,36 @@ function definirTelaEditorAutoria(screen) {
     if (el.writerEditorMode) {
         el.writerEditorMode.textContent = tabLivroAtiva ? 'Tela 1 de 2: livro' : 'Tela 2 de 2: capítulos';
     }
+    if (screen === 'chapters') {
+        definirTelaCapitulos(state.writer.chapterScreen || 'list');
+    }
+}
+
+function definirTelaCapitulos(screen) {
+    if (!['list', 'editor'].includes(screen)) {
+        return;
+    }
+    if (screen === 'editor' && !obterHistoriaAutoriaSelecionada()) {
+        showToast('Crie o livro antes de escrever capítulos.', true);
+        return;
+    }
+    const historia = obterHistoriaAutoriaSelecionada();
+    if (screen === 'editor' && historia && el.capituloHistoriaId) {
+        el.capituloHistoriaId.value = historia.id;
+    }
+    state.writer.chapterScreen = screen;
+
+    const telas = document.querySelectorAll('[data-writer-chapter-screen]');
+    telas.forEach((item) => {
+        item.classList.toggle('is-active', item.dataset.writerChapterScreen === screen);
+    });
+
+    const ativaLista = screen === 'list';
+    el.writerChapterListBtn?.classList.toggle('is-active', ativaLista);
+    el.writerChapterListBtn?.setAttribute('aria-selected', ativaLista ? 'true' : 'false');
+    el.writerChapterEditorBtn?.classList.toggle('is-active', !ativaLista);
+    el.writerChapterEditorBtn?.setAttribute('aria-selected', ativaLista ? 'false' : 'true');
+    sincronizarFormularioCapituloAutoria();
 }
 
 function atualizarPreviewCapa(src, mensagem = 'Adicionar capa do livro') {
@@ -876,7 +920,10 @@ function renderPainelCapitulosAutoria(story) {
                     <strong>${chapter.ordem}. ${escapeHtml(chapter.titulo)}</strong>
                     <p class="muted">${chapter.total_palavras || 0} palavras</p>
                 </div>
-                <button class="btn-ghost" data-action="editar-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" data-chapter-id="${escapeAttribute(chapter.id)}" type="button">Editar</button>
+                <div class="inline-actions">
+                    <button class="btn-ghost" data-action="editar-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" data-chapter-id="${escapeAttribute(chapter.id)}" type="button">Editar</button>
+                    <button class="btn-ghost" data-action="excluir-capitulo-autoria" data-story-id="${escapeAttribute(story.id)}" data-chapter-id="${escapeAttribute(chapter.id)}" type="button">Excluir</button>
+                </div>
             </article>
         `).join('') : `<p class="placeholder">Este livro ainda não tem capítulos.</p>`}
     `;
@@ -909,6 +956,7 @@ function abrirEditorAutoria(storyId = null, options = {}) {
     state.capituloEditandoId = null;
     const historia = obterHistoriaAutoriaSelecionada();
     const telaInicial = options.screen || (historia ? 'chapters' : 'book');
+    state.writer.chapterScreen = options.chapterScreen || (historia ? 'list' : 'editor');
 
     if (el.formNovaHistoria) {
         el.formNovaHistoria.reset();
@@ -956,11 +1004,14 @@ function abrirEditorAutoria(storyId = null, options = {}) {
 
     if (historia) {
         renderPainelCapitulosAutoria(historia);
-        if (!ehLivroImportadoPorEpub(historia)) {
-            prepararNovoCapitulo(historia.id, false);
-        } else {
-            sincronizarFormularioCapituloAutoria();
+        if (el.formNovoCapitulo) {
+            el.formNovoCapitulo.reset();
         }
+        state.capituloEditandoId = null;
+        if (el.capituloHistoriaId) {
+            el.capituloHistoriaId.value = historia.id;
+        }
+        sincronizarFormularioCapituloAutoria();
     } else {
         renderPainelCapitulosAutoriaVazio();
         sincronizarFormularioCapituloAutoria();
@@ -983,6 +1034,7 @@ function fecharEditorAutoria() {
     state.writer.autoCoverFromEpub = null;
     state.writer.epubMetadata = null;
     state.writer.screen = 'book';
+    state.writer.chapterScreen = 'list';
     renderEscrever();
 }
 
@@ -1028,6 +1080,9 @@ function sincronizarFormularioCapituloAutoria() {
         el.capituloSubmit.textContent = editando ? 'Salvar capítulo' : 'Adicionar capítulo';
         el.capituloSubmit.disabled = !historia || bloqueadoPorEpub;
     }
+    if (el.capituloBackList) {
+        el.capituloBackList.disabled = !historia;
+    }
     if (el.capituloEditCancel) {
         el.capituloEditCancel.classList.toggle('hidden', !editando);
     }
@@ -1056,6 +1111,7 @@ function prepararNovoCapitulo(storyId, rolar = false) {
     if (el.capituloHistoriaId) {
         el.capituloHistoriaId.value = storyId;
     }
+    definirTelaCapitulos('editor');
     sincronizarFormularioCapituloAutoria();
     if (rolar) {
         el.formNovoCapitulo?.scrollIntoView({behavior: 'smooth', block: 'center'});
@@ -1078,6 +1134,7 @@ function preencherEdicaoCapitulo(storyId, chapterId) {
     el.formNovoCapitulo.elements.titulo.value = capitulo.titulo || '';
     el.formNovoCapitulo.elements.conteudo.value = capitulo.conteudo || '';
     definirTelaEditorAutoria('chapters');
+    definirTelaCapitulos('editor');
     sincronizarFormularioCapituloAutoria();
     el.formNovoCapitulo.scrollIntoView({behavior: 'smooth', block: 'center'});
     el.formNovoCapitulo.elements.titulo.focus();
@@ -1085,14 +1142,86 @@ function preencherEdicaoCapitulo(storyId, chapterId) {
 
 function limparEdicaoCapitulo(rolar = false) {
     const storyId = state.autoriaSelecionadaId || el.capituloHistoriaId?.value || '';
-    const historia = (state.minhasHistorias || []).find((story) => story.id === storyId);
-    if (historia && ehLivroImportadoPorEpub(historia)) {
-        state.capituloEditandoId = null;
-        el.formNovoCapitulo?.reset();
-        sincronizarFormularioCapituloAutoria();
+    state.capituloEditandoId = null;
+    if (el.formNovoCapitulo) {
+        el.formNovoCapitulo.reset();
+    }
+    if (el.capituloEditId) {
+        el.capituloEditId.value = '';
+    }
+    if (el.capituloHistoriaId && storyId) {
+        el.capituloHistoriaId.value = storyId;
+    }
+    definirTelaCapitulos('list');
+    sincronizarFormularioCapituloAutoria();
+    if (rolar) {
+        el.writerModalChaptersList?.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    }
+}
+
+function handleChapterFormatActionClick(event) {
+    const button = event.target.closest('[data-action="formatar-capitulo"]');
+    if (!button) {
         return;
     }
-    prepararNovoCapitulo(storyId, rolar);
+    const format = String(button.dataset.format || '');
+    aplicarFormatacaoNoEditorCapitulo(format);
+}
+
+function aplicarFormatacaoNoEditorCapitulo(format) {
+    const textarea = el.formNovoCapitulo?.elements?.conteudo;
+    if (!textarea || textarea.disabled) {
+        return;
+    }
+
+    const inicio = Number(textarea.selectionStart || 0);
+    const fim = Number(textarea.selectionEnd || 0);
+    const selecionado = textarea.value.slice(inicio, fim);
+
+    const formatos = {
+        bold: ['**', '**'],
+        italic: ['*', '*'],
+        subtitle: ['## ', ''],
+        quote: ['> ', ''],
+        list: ['- ', ''],
+    };
+    const alvo = formatos[format];
+    if (!alvo) {
+        return;
+    }
+
+    const [prefixo, sufixo] = alvo;
+    const textoBase = selecionado || 'texto';
+    const substituto = `${prefixo}${textoBase}${sufixo}`;
+    textarea.setRangeText(substituto, inicio, fim, 'end');
+    const cursorInicio = inicio + prefixo.length;
+    const cursorFim = cursorInicio + textoBase.length;
+    textarea.focus();
+    textarea.setSelectionRange(cursorInicio, cursorFim);
+}
+
+async function excluirCapituloAutoria(storyId, chapterId) {
+    if (!storyId || !chapterId) {
+        showToast('Capítulo inválido para exclusão.', true);
+        return;
+    }
+    const confirmar = confirm('Deseja realmente excluir este capítulo?');
+    if (!confirmar) {
+        return;
+    }
+
+    const response = await api(
+        `/me/autoria/historias/${encodeURIComponent(storyId)}/capitulos/${encodeURIComponent(chapterId)}`,
+        {method: 'DELETE'},
+    );
+    showToast(response.mensagem || 'Capítulo excluído com sucesso.');
+    if (state.capituloEditandoId === chapterId) {
+        state.capituloEditandoId = null;
+    }
+    state.autoriaSelecionadaId = storyId;
+    await carregarAutoria();
+    renderEscrever();
+    abrirEditorAutoria(storyId, {screen: 'chapters', chapterScreen: 'list'});
 }
 
 function renderVoce() {
@@ -1201,14 +1330,16 @@ function renderStoryCard(story) {
     const sentimentoSelecionado = notaParaSentimento(story.minha_avaliacao);
     return `
         <article class="writer-book-card ${cardClass} story-discovery-card ${story.id === state.autoriaSelecionadaId ? 'is-selected' : ''}" data-story-id="${escapeAttribute(story.id)}">
-            <button class="writer-book-cover" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}" type="button" aria-label="Abrir ${escapeAttribute(story.titulo)}">
-                ${renderStoryCover(story)}
-            </button>
-            <div class="story-hover-actions" aria-label="Ações rápidas">
-                <button class="story-quick-btn" data-action="salvar-historia" data-story-id="${escapeAttribute(story.id)}" data-categoria="favoritos" type="button">Favoritar</button>
-                <button class="story-quick-btn ${sentimentoSelecionado === 'amei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="amei" type="button">Amei</button>
-                <button class="story-quick-btn ${sentimentoSelecionado === 'gostei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="gostei" type="button">Gostei</button>
-                <button class="story-quick-btn ${sentimentoSelecionado === 'nao_gostei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="nao_gostei" type="button">Não gostei</button>
+            <div class="writer-book-cover-wrap">
+                <button class="writer-book-cover" data-action="abrir-historia" data-story-id="${escapeAttribute(story.id)}" type="button" aria-label="Abrir ${escapeAttribute(story.titulo)}">
+                    ${renderStoryCover(story)}
+                </button>
+                <div class="story-hover-actions" aria-label="Ações rápidas">
+                    <button class="story-quick-btn" data-action="salvar-historia" data-story-id="${escapeAttribute(story.id)}" data-categoria="favoritos" type="button">Favoritar</button>
+                    <button class="story-quick-btn ${sentimentoSelecionado === 'amei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="amei" type="button">Amei</button>
+                    <button class="story-quick-btn ${sentimentoSelecionado === 'gostei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="gostei" type="button">Gostei</button>
+                    <button class="story-quick-btn ${sentimentoSelecionado === 'nao_gostei' ? 'is-active' : ''}" data-action="avaliar-sentimento" data-story-id="${escapeAttribute(story.id)}" data-sentimento-voto="nao_gostei" type="button">Não gostei</button>
+                </div>
             </div>
             <div class="writer-book-info">
                 <strong>${escapeHtml(story.titulo)}</strong>
@@ -1344,6 +1475,11 @@ async function handleStoryActionClick(event) {
             return;
         }
 
+        if (action === 'excluir-capitulo-autoria') {
+            await excluirCapituloAutoria(storyId, button.dataset.chapterId);
+            return;
+        }
+
         if (action === 'salvar-historia') {
             await salvarHistoria(storyId, button.dataset.categoria || 'lendo');
             return;
@@ -1398,7 +1534,7 @@ async function publicarHistoria(event) {
         } else if (!editando && state.writer.autoCoverFromEpub) {
             payload.capa = state.writer.autoCoverFromEpub;
         }
-        // suporte a EPUB e preview (MOV/MP4)
+        // suporte a EPUB
         const epubFile = el.storyFileInput?.files?.[0];
         if (epubFile) {
             const tiposPermitidosEpub = new Set(['application/epub+zip', 'application/octet-stream']);
@@ -1412,19 +1548,6 @@ async function publicarHistoria(event) {
                 return;
             }
             payload.epub = await lerArquivoComoDataURL(epubFile);
-        }
-        const previewFile = el.storyPreviewInput?.files?.[0];
-        if (previewFile) {
-            const tiposPermitidosPreview = new Set(['video/quicktime', 'video/mp4']);
-            if (!tiposPermitidosPreview.has(previewFile.type)) {
-                showToast('Formato de preview inválido. Use MOV ou MP4.', true);
-                return;
-            }
-            if (previewFile.size > 10 * 1024 * 1024) {
-                showToast('Preview muito grande. Use até 10MB.', true);
-                return;
-            }
-            payload.preview = await lerArquivoComoDataURL(previewFile);
         }
 
         const endpoint = editando
@@ -1489,7 +1612,7 @@ async function publicarCapitulo(event) {
         el.formNovoCapitulo.reset();
         await carregarAutoria();
         renderEscrever();
-        abrirEditorAutoria(state.autoriaSelecionadaId);
+        abrirEditorAutoria(state.autoriaSelecionadaId, {screen: 'chapters', chapterScreen: 'list'});
     } catch (error) {
         handleError(error);
     }
@@ -1563,7 +1686,7 @@ async function avaliarHistoria(storyId, nota) {
             state.historiaDetalhe.media_avaliacoes = media;
             state.historiaDetalhe.total_avaliacoes = total;
             state.historiaDetalhe.minha_avaliacao = nota;
-            atualizarSeletorAvaliacao(nota);
+            atualizarSeletorAvaliacao(nota, {storyId});
             renderDetalheHistoria();
         }
 
@@ -1688,13 +1811,17 @@ function aplicarPaginacaoCapitulo(paginaInicial = 'manter') {
     }
 
     const conteudo = state.capituloAtivo.capitulo?.conteudo || '';
-    const palavrasPorPagina = calcularPalavrasPorPagina();
-    state.readerPagination.wordsPerPage = palavrasPorPagina;
-    state.readerPagination.pages = paginarTextoPorPalavras(conteudo, palavrasPorPagina);
-
+    const paginasNoSpread = leitorExibeDuasPaginas() ? 2 : 1;
+    const paginasIndividuais = paginarTextoPorLayout(conteudo);
+    state.readerPagination.pages = agruparPaginasEmSpreads(paginasIndividuais, paginasNoSpread);
     if (!state.readerPagination.pages.length) {
-        state.readerPagination.pages = [''];
+        state.readerPagination.pages = [`${READER_SPREAD_SEPARATOR}`];
     }
+
+    const totalPalavras = extrairPalavrasTexto(conteudo).length;
+    const totalSpreads = Math.max(1, state.readerPagination.pages.length);
+    state.readerPagination.wordsPerSpread = Math.max(20, Math.round(totalPalavras / totalSpreads));
+    state.readerPagination.wordsPerPage = Math.max(12, Math.round(state.readerPagination.wordsPerSpread / paginasNoSpread));
 
     if (paginaInicial === 'primeira') {
         state.readerPagination.currentPage = 0;
@@ -1710,19 +1837,66 @@ function aplicarPaginacaoCapitulo(paginaInicial = 'manter') {
     renderPaginaAtualLeitura();
 }
 
-function calcularPalavrasPorPagina() {
-    const baseMax = 200;
-    const tamanhoFonte = Number(state.readerPrefs.fontSize || 19);
-    const escala = 18 / Math.max(16, tamanhoFonte);
-    const ajustado = Math.floor(baseMax * escala);
-    return Math.max(70, Math.min(baseMax, ajustado));
+function leitorExibeDuasPaginas() {
+    return !window.matchMedia('(max-width: 980px)').matches;
 }
 
-function paginarTextoPorPalavras(conteudo, palavrasPorPagina) {
-    const palavras = String(conteudo || '')
+function obterFamiliaFonteLeitor(chaveFonte) {
+    if (chaveFonte === 'georgia') {
+        return 'Georgia, "Times New Roman", serif';
+    }
+    if (chaveFonte === 'book') {
+        return '"Baskerville", "Book Antiqua", "Garamond", serif';
+    }
+    if (chaveFonte === 'sans_clean') {
+        return '"Avenir Next", "Segoe UI", "Helvetica Neue", Arial, sans-serif';
+    }
+    return '"Iowan Old Style", "Palatino Linotype", Georgia, serif';
+}
+
+function extrairPalavrasTexto(texto) {
+    return String(texto || '')
         .trim()
         .split(/\s+/)
         .filter(Boolean);
+}
+
+function obterMetricasPaginaLeitor() {
+    const stage = el.readerContent;
+    if (!stage) {
+        return null;
+    }
+    const larguraDisponivel = Math.max(320, Number(stage.clientWidth || 0) || Math.round(window.innerWidth * 0.72));
+    const alturaDisponivel = Math.max(260, Number(stage.clientHeight || 0) || Math.round(window.innerHeight * 0.62));
+    const paginasNoSpread = leitorExibeDuasPaginas() ? 2 : 1;
+    const gap = paginasNoSpread === 2
+        ? Math.max(12, Math.min(28, Math.round(larguraDisponivel * 0.022)))
+        : 0;
+    const larguraSpreadUtil = Math.max(200, larguraDisponivel - 24 - gap);
+    const alturaSpreadUtil = Math.max(220, alturaDisponivel - 22);
+    const larguraPagina = Math.max(170, Math.floor(larguraSpreadUtil / paginasNoSpread));
+    const alturaPagina = Math.max(180, Math.floor(alturaSpreadUtil));
+
+    return {
+        larguraPagina,
+        alturaPagina,
+    };
+}
+
+function calcularPalavrasPorPagina() {
+    const metricas = obterMetricasPaginaLeitor();
+    const tamanhoFonte = Math.max(16, Number(state.readerPrefs.fontSize || 24));
+    const alturaLinha = tamanhoFonte * 1.55;
+    const larguraPagina = Math.max(170, metricas?.larguraPagina || 300);
+    const alturaPagina = Math.max(180, metricas?.alturaPagina || 420);
+    const linhasPorPagina = Math.max(5, Math.floor(alturaPagina / alturaLinha) - 1);
+    const caracteresPorLinha = Math.max(16, Math.floor(larguraPagina / (tamanhoFonte * 0.52)));
+    const palavrasPorLinha = caracteresPorLinha / 5.2;
+    return Math.max(24, Math.min(280, Math.floor(linhasPorPagina * palavrasPorLinha)));
+}
+
+function paginarTextoPorPalavras(conteudo, palavrasPorPagina) {
+    const palavras = extrairPalavrasTexto(conteudo);
 
     if (!palavras.length) {
         return [];
@@ -1733,6 +1907,108 @@ function paginarTextoPorPalavras(conteudo, palavrasPorPagina) {
         paginas.push(palavras.slice(index, index + palavrasPorPagina).join(' '));
     }
     return paginas;
+}
+
+function obterMedidorPagina() {
+    if (state.readerPagination.measurerEl && document.body.contains(state.readerPagination.measurerEl)) {
+        return state.readerPagination.measurerEl;
+    }
+
+    const medidor = document.createElement('article');
+    medidor.className = 'reader-page reader-page-measurer';
+    medidor.style.position = 'fixed';
+    medidor.style.left = '-10000px';
+    medidor.style.top = '0';
+    medidor.style.zIndex = '-1';
+    medidor.style.visibility = 'hidden';
+    medidor.style.pointerEvents = 'none';
+    medidor.style.overflow = 'hidden';
+    medidor.style.contain = 'strict';
+    document.body.appendChild(medidor);
+    state.readerPagination.measurerEl = medidor;
+    return medidor;
+}
+
+function atualizarMedidorPagina(medidor) {
+    const metricas = obterMetricasPaginaLeitor();
+    medidor.style.width = `${metricas?.larguraPagina || 300}px`;
+    medidor.style.height = `${metricas?.alturaPagina || 420}px`;
+    medidor.style.fontSize = `${Math.max(16, Number(state.readerPrefs.fontSize || 24))}px`;
+    medidor.style.fontFamily = obterFamiliaFonteLeitor(state.readerPrefs.fontFamily);
+    medidor.style.lineHeight = '1.55';
+}
+
+function trechoCabeNoMedidor(medidor, texto, incluirTitulo = false) {
+    const titulo = escapeHtml(state.capituloAtivo?.capitulo?.titulo || 'Capítulo');
+    medidor.innerHTML = `
+        ${incluirTitulo ? `<h3>${titulo}</h3>` : ''}
+        ${texto ? `<p class="reader-page-text">${escapeHtml(texto)}</p>` : ''}
+    `;
+    return medidor.scrollHeight <= medidor.clientHeight + 1;
+}
+
+function medirPalavrasQueCabem(palavras, inicio, medidor, incluirTitulo = false) {
+    const restante = palavras.length - inicio;
+    if (restante <= 0) {
+        return 0;
+    }
+
+    let baixo = 1;
+    let alto = restante;
+    let melhor = 0;
+
+    while (baixo <= alto) {
+        const meio = Math.floor((baixo + alto) / 2);
+        const texto = palavras.slice(inicio, inicio + meio).join(' ');
+        if (trechoCabeNoMedidor(medidor, texto, incluirTitulo)) {
+            melhor = meio;
+            baixo = meio + 1;
+        } else {
+            alto = meio - 1;
+        }
+    }
+
+    return Math.max(1, melhor);
+}
+
+function paginarTextoPorLayout(conteudo) {
+    const palavras = extrairPalavrasTexto(conteudo);
+    if (!palavras.length) {
+        return [];
+    }
+
+    const medidor = obterMedidorPagina();
+    atualizarMedidorPagina(medidor);
+    const paginas = [];
+    let indice = 0;
+    let primeiraPagina = true;
+
+    while (indice < palavras.length) {
+        const quantidade = medirPalavrasQueCabem(palavras, indice, medidor, primeiraPagina);
+        const qtdSegura = Math.max(1, Math.min(quantidade, palavras.length - indice));
+        paginas.push(palavras.slice(indice, indice + qtdSegura).join(' '));
+        indice += qtdSegura;
+        primeiraPagina = false;
+    }
+
+    return paginas;
+}
+
+function agruparPaginasEmSpreads(paginas, paginasNoSpread) {
+    if (!paginas.length) {
+        return [];
+    }
+    if (paginasNoSpread <= 1) {
+        return paginas.map((pagina) => `${pagina}${READER_SPREAD_SEPARATOR}`);
+    }
+
+    const spreads = [];
+    for (let indice = 0; indice < paginas.length; indice += 2) {
+        const esquerda = paginas[indice] || '';
+        const direita = paginas[indice + 1] || '';
+        spreads.push(`${esquerda}${READER_SPREAD_SEPARATOR}${direita}`);
+    }
+    return spreads;
 }
 
 function obterTotalPaginasDoCapitulo(totalPalavras, palavrasPorPagina) {
@@ -1746,7 +2022,9 @@ function calcularContadorGlobalLivro() {
     const indiceLocal = state.readerPagination.currentPage || 0;
     const paginaLocalAtual = indiceLocal + 1;
     const totalPaginasLocais = paginasLocais.length || 1;
-    const palavrasPorPagina = state.readerPagination.wordsPerPage || calcularPalavrasPorPagina();
+    const paginasNoSpread = leitorExibeDuasPaginas() ? 2 : 1;
+    const palavrasPorSpread = state.readerPagination.wordsPerSpread
+        || (calcularPalavrasPorPagina() * paginasNoSpread);
     const capitulosLivro = state.capituloAtivo?.historia?.capitulos;
     const capituloAtualId = state.capituloAtivo?.capitulo?.id;
 
@@ -1762,7 +2040,7 @@ function calcularContadorGlobalLivro() {
     let capituloEncontrado = false;
 
     for (const capitulo of capitulosLivro) {
-        const totalPaginasCapitulo = obterTotalPaginasDoCapitulo(capitulo.total_palavras, palavrasPorPagina);
+        const totalPaginasCapitulo = obterTotalPaginasDoCapitulo(capitulo.total_palavras, palavrasPorSpread);
         totalPaginasLivro += totalPaginasCapitulo;
 
         if (!capituloEncontrado) {
@@ -1864,7 +2142,8 @@ function renderPaginaAtualLeitura() {
     const paginas = state.readerPagination.pages || [];
     const indice = state.readerPagination.currentPage || 0;
     const total = paginas.length || 1;
-    const paginaAtual = paginas[indice] || '';
+    const spreadAtual = paginas[indice] || `${READER_SPREAD_SEPARATOR}`;
+    const [textoEsquerda = '', textoDireita = ''] = String(spreadAtual).split(READER_SPREAD_SEPARATOR);
     const contadorLivro = calcularContadorGlobalLivro();
     const hasPrevChapter = Boolean(state.capituloAtivo?.navegacao?.anterior_id);
     const hasNextChapter = Boolean(state.capituloAtivo?.navegacao?.proximo_id);
@@ -1872,18 +2151,14 @@ function renderPaginaAtualLeitura() {
     const hasGlobalNext = indice < total - 1 || hasNextChapter;
     state.readerPagination.currentGlobalPage = contadorLivro.paginaAtual;
 
-    const blocos = dividirPaginaEmParagrafos(paginaAtual, 42);
-    const destaquesDaPagina = obterDestaquesDaPagina(paginaAtual);
+    const destaquesEsquerda = obterDestaquesDaPagina(textoEsquerda);
+    const destaquesDireita = obterDestaquesDaPagina(textoDireita);
     aplicarPreferenciasVisuaisLeitor();
-
-    const metade = Math.ceil(blocos.length / 2);
-    const blocosEsquerda = blocos.slice(0, metade);
-    const blocosDireita = blocos.slice(metade);
-    const renderBlocos = (items, incluirTitulo = false) => `
+    const renderPagina = (texto, incluirTitulo = false, destaques = []) => `
         <article class="reader-page">
             ${incluirTitulo ? `<h3>${escapeHtml(state.capituloAtivo?.capitulo?.titulo || 'Capítulo')}</h3>` : ''}
-            ${items.length
-                ? items.map((paragrafo) => `<p>${renderTextoComDestaques(paragrafo, destaquesDaPagina)}</p>`).join('')
+            ${texto
+                ? `<p class="reader-page-text">${renderTextoComDestaques(texto, destaques)}</p>`
                 : (indice === 0 && incluirTitulo ? '<p>Este capítulo ainda não possui conteúdo.</p>' : '')}
         </article>
     `;
@@ -1891,8 +2166,8 @@ function renderPaginaAtualLeitura() {
     el.readerContent.innerHTML = `
         <div class="reader-pages">
             <div class="reader-spread">
-                ${renderBlocos(blocosEsquerda, indice === 0)}
-                ${renderBlocos(blocosDireita)}
+                ${renderPagina(textoEsquerda, indice === 0, destaquesEsquerda)}
+                ${renderPagina(textoDireita, false, destaquesDireita)}
             </div>
         </div>
     `;
@@ -1914,18 +2189,6 @@ function renderPaginaAtualLeitura() {
     renderMarcacoesLeitor();
     reiniciarTempoDaPagina();
     atualizarTempoLeituraUI();
-}
-
-function dividirPaginaEmParagrafos(texto, palavrasPorBloco = 42) {
-    const palavras = String(texto || '').trim().split(/\s+/).filter(Boolean);
-    if (!palavras.length) {
-        return [];
-    }
-    const blocos = [];
-    for (let i = 0; i < palavras.length; i += palavrasPorBloco) {
-        blocos.push(palavras.slice(i, i + palavrasPorBloco).join(' '));
-    }
-    return blocos;
 }
 
 async function navegarPaginaAnterior() {
@@ -1980,7 +2243,7 @@ function handleReaderPreferenceOptionClick(event) {
 
 function onReaderPreferenceChanged() {
     const fontSize = Number(el.readerFontSize?.value || state.readerPrefs.fontSize || 19);
-    state.readerPrefs.fontSize = Math.max(16, Math.min(30, fontSize));
+    state.readerPrefs.fontSize = Math.max(16, Math.min(40, fontSize));
 
     if (el.readerFontSizeValue) {
         el.readerFontSizeValue.textContent = `${state.readerPrefs.fontSize}px`;
@@ -1990,6 +2253,16 @@ function onReaderPreferenceChanged() {
     aplicarPreferenciasVisuaisLeitor();
     salvarPreferenciasLeitor();
     aplicarPaginacaoCapitulo('manter');
+}
+
+function handleResizeLeitor() {
+    if (!state.capituloAtivo || el.readerModal?.classList.contains('hidden')) {
+        return;
+    }
+    clearTimeout(handleResizeLeitor.timer);
+    handleResizeLeitor.timer = setTimeout(() => {
+        aplicarPaginacaoCapitulo('manter');
+    }, 140);
 }
 
 function carregarPreferenciasLeitor() {
@@ -2004,7 +2277,7 @@ function carregarPreferenciasLeitor() {
                 state.readerPrefs.fontFamily = parsed.fontFamily;
             }
             if (typeof parsed.fontSize === 'number') {
-                state.readerPrefs.fontSize = Math.max(16, Math.min(30, parsed.fontSize));
+                state.readerPrefs.fontSize = Math.max(16, Math.min(40, parsed.fontSize));
             }
             if (typeof parsed.bgColor === 'string' && READER_BACKGROUNDS.has(parsed.bgColor)) {
                 state.readerPrefs.bgColor = parsed.bgColor;
@@ -2705,7 +2978,11 @@ function corNomeUsuario(nome) {
 function atualizarSeletorAvaliacao(nota, options = {}) {
     const valor = Math.max(1, Math.min(5, Number(nota || 1)));
     const sentimento = notaParaSentimento(valor);
-    const botoesSentimento = document.querySelectorAll('[data-sentimento-voto]');
+    const storyId = String(options.storyId || '').trim();
+    const seletor = storyId
+        ? `[data-sentimento-voto][data-story-id="${storyId}"]`
+        : '[data-sentimento-voto]';
+    const botoesSentimento = document.querySelectorAll(seletor);
     botoesSentimento.forEach((botao) => {
         botao.classList.toggle('is-active', botao.dataset.sentimentoVoto === sentimento);
     });

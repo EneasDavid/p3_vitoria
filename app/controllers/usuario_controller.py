@@ -310,6 +310,10 @@ class UsuarioController:
 
         conta = contexto['conta']
         from app.controllers.historia_controller import HistoriaController
+        if preview_video:
+            preview_ok, _, preview_erro = HistoriaController._validar_preview_video(preview_video)
+            if not preview_ok:
+                return {'sucesso': False, 'erro': preview_erro or 'Preview inválido', 'codigo': 400}
         if epub_data:
             return HistoriaController.criar_historia_com_epub(
                 titulo, sinopse, genero, conta['autor_id'], capa=capa, epub_data=epub_data, preview_video=preview_video
@@ -378,6 +382,24 @@ class UsuarioController:
             return {'sucesso': False, 'erro': 'Você só pode editar suas próprias histórias', 'codigo': 403}
 
         return HistoriaController.editar_capitulo(historia_id, capitulo_id, titulo, conteudo)
+
+    @staticmethod
+    def excluir_capitulo_por_token(token: str, historia_id: str, capitulo_id: str) -> dict:
+        """Exclui capítulo em uma história da própria conta."""
+        contexto = UsuarioController._obter_contexto_autenticado(token)
+        if not contexto['sucesso']:
+            return contexto
+
+        conta = contexto['conta']
+        from app.controllers.historia_controller import historias_db, HistoriaController
+
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+        if not historia.autor or historia.autor.id_usuario != conta['autor_id']:
+            return {'sucesso': False, 'erro': 'Você só pode editar suas próprias histórias', 'codigo': 403}
+
+        return HistoriaController.excluir_capitulo(historia_id, capitulo_id)
 
     @staticmethod
     def salvar_na_biblioteca(token: str, historia_id: str, categoria: str) -> dict:
@@ -849,6 +871,7 @@ class UsuarioController:
         preferencias: dict[str, float] = {}
         generos_amados: set[str] = set()
         generos_bloqueados: set[str] = set()
+        minhas_notas_por_historia: dict[str, int] = {}
 
         # Preferências explícitas vindas de avaliação do próprio leitor.
         for historia in historias_db.values():
@@ -868,6 +891,7 @@ class UsuarioController:
                     generos_bloqueados.add(genero)
                 else:
                     preferencias[genero] = preferencias.get(genero, 0) + 1.0
+                minhas_notas_por_historia[historia.id] = nota
 
         # Leitura/biblioteca entra como sinal secundário.
         for historia in usuario.biblioteca.obter_todas_as_historias():
@@ -881,6 +905,10 @@ class UsuarioController:
             historia for historia in historias_db.values()
             if historia.id not in historias_salvas
             and normalizar_genero(historia.genero) not in generos_bloqueados
+            and (
+                len(historia.avaliacoes) == 0
+                or minhas_notas_por_historia.get(historia.id, 0) >= 4
+            )
         ]
 
         def pontuacao(historia):

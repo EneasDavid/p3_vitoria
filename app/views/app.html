@@ -259,7 +259,7 @@
 
             <div class="modal-body writer-editor-grid writer-two-screens">
                 <section class="writer-screen writer-screen-book is-active" data-writer-screen="book">
-                    <form id="nova-historia-form" class="form-stack">
+                    <form id="nova-historia-form" class="form-stack writer-book-form">
                         <input id="historia-edit-id" type="hidden" name="historia_id" value="">
                         <label class="upload-area" for="story-cover-input" aria-label="Adicionar capa do livro">
                             <div class="upload-inner" id="story-cover-preview">
@@ -273,11 +273,6 @@
                             <span class="field-label">Upload EPUB (opcional)</span>
                             <input id="story-file-input" type="file" accept=".epub,application/epub+zip">
                             <small id="story-epub-meta-hint" class="muted">Se faltarem dados, o sistema usa os metadados do EPUB automaticamente.</small>
-                        </label>
-
-                        <label class="field">
-                            <span class="field-label">Preview (MOV/MP4) (opcional)</span>
-                            <input id="story-preview-input" type="file" accept="video/quicktime,video/mp4">
                         </label>
 
                         <label class="field">
@@ -302,33 +297,49 @@
                 </section>
 
                 <section class="writer-screen writer-screen-chapters" data-writer-screen="chapters">
-                    <article class="writer-chapter-panel">
-                        <div class="writer-chapter-list-head">
-                            <div>
-                                <h3 id="capitulo-form-title">Capítulos</h3>
-                                <p id="capitulo-form-hint" class="muted">Crie e edite os capítulos do seu livro.</p>
-                            </div>
-                        </div>
-                        <div id="writer-modal-chapters-list" class="writer-chapter-list"></div>
-                    </article>
+                    <div class="writer-chapter-tabs" role="tablist" aria-label="Fluxo de capítulos">
+                        <button id="writer-chapter-list-btn" class="writer-chapter-tab is-active" data-writer-chapter-screen="list" type="button" role="tab" aria-selected="true">Capítulos</button>
+                    </div>
 
-                    <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
-                        <input id="capitulo-historia-id" type="hidden" name="historia_id" value="">
-                        <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
-                        <label class="field">
-                            <span class="field-label">Título do capítulo</span>
-                            <input id="chapter-title" type="text" name="titulo" required placeholder="Título do capítulo">
-                        </label>
-                        <label class="field">
-                            <span class="field-label">Conteúdo</span>
-                            <textarea name="conteudo" id="editor-textarea" class="editor-area"
-                                placeholder="Escreva o capítulo aqui..."></textarea>
-                        </label>
-                        <div class="writer-screen-actions">
-                            <button id="capitulo-edit-cancel" class="btn-ghost hidden" type="button">Cancelar edição</button>
-                            <button id="capitulo-submit" class="btn-primary" type="submit">Adicionar capítulo</button>
-                        </div>
-                    </form>
+                    <section class="writer-chapter-screen is-active" data-writer-chapter-screen="list">
+                        <article class="writer-chapter-panel">
+                            <div class="writer-chapter-list-head">
+                                <div>
+                                    <h3 id="capitulo-form-title">Capítulos</h3>
+                                    <p id="capitulo-form-hint" class="muted">Crie e edite os capítulos do seu livro.</p>
+                                </div>
+                            </div>
+                            <div id="writer-modal-chapters-list" class="writer-chapter-list"></div>
+                        </article>
+                    </section>
+
+                    <section class="writer-chapter-screen" data-writer-chapter-screen="editor">
+                        <form id="novo-capitulo-form" class="form-stack writer-chapter-form">
+                            <input id="capitulo-historia-id" type="hidden" name="historia_id" value="">
+                            <input id="capitulo-edit-id" type="hidden" name="capitulo_id" value="">
+                            <div class="chapter-format-toolbar" role="toolbar" aria-label="Formatar capítulo">
+                                <button type="button" class="chapter-format-btn" data-action="formatar-capitulo" data-format="bold" title="Negrito">B</button>
+                                <button type="button" class="chapter-format-btn" data-action="formatar-capitulo" data-format="italic" title="Itálico"><em>I</em></button>
+                                <button type="button" class="chapter-format-btn" data-action="formatar-capitulo" data-format="subtitle" title="Subtítulo">H</button>
+                                <button type="button" class="chapter-format-btn" data-action="formatar-capitulo" data-format="quote" title="Citação">"</button>
+                                <button type="button" class="chapter-format-btn" data-action="formatar-capitulo" data-format="list" title="Lista">•</button>
+                            </div>
+                            <label class="field">
+                                <span class="field-label">Título do capítulo</span>
+                                <input id="chapter-title" type="text" name="titulo" required placeholder="Título do capítulo">
+                            </label>
+                            <label class="field">
+                                <span class="field-label">Conteúdo</span>
+                                <textarea name="conteudo" id="editor-textarea" class="editor-area"
+                                    placeholder="Escreva o capítulo aqui..."></textarea>
+                            </label>
+                            <div class="writer-screen-actions">
+                                <button id="capitulo-back-list" class="btn-ghost" type="button">Voltar aos capítulos</button>
+                                <button id="capitulo-edit-cancel" class="btn-ghost hidden" type="button">Cancelar edição</button>
+                                <button id="capitulo-submit" class="btn-primary" type="submit">Adicionar capítulo</button>
+                            </div>
+                        </form>
+                    </section>
                 </section>
             </div>
         </article>
@@ -397,7 +408,7 @@
                             <div class="reader-setting-group">
                                 <div class="reader-font-size-row">
                                     <span>A</span>
-                                    <input id="reader-font-size" type="range" min="16" max="30" step="1" value="24" aria-label="Tamanho da letra">
+                                    <input id="reader-font-size" type="range" min="16" max="40" step="1" value="24" aria-label="Tamanho da letra">
                                     <strong>A</strong>
                                 </div>
                                 <small id="reader-font-size-value" class="muted">24px</small>

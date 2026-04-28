@@ -626,6 +626,17 @@ def me_autoria_editar_capitulo(historia_id, capitulo_id):
     return resposta_api(resultado, 200 if resultado['sucesso'] else 400)
 
 
+@app.route('/api/me/autoria/historias/<historia_id>/capitulos/<capitulo_id>', methods=['DELETE'])
+@require_auth
+def me_autoria_excluir_capitulo(historia_id, capitulo_id):
+    resultado = UsuarioController.excluir_capitulo_por_token(
+        g.auth_token,
+        historia_id,
+        capitulo_id,
+    )
+    return resposta_api(resultado, 200 if resultado['sucesso'] else 400)
+
+
 @app.route('/api/status', methods=['GET'])
 def status():
     """Status da API."""

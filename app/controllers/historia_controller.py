@@ -65,6 +65,37 @@ class HistoriaController:
         return True, capa_normalizada, None
 
     @staticmethod
+    def _validar_preview_video(preview_video: str | None) -> tuple[bool, str | None, str | None]:
+        """Valida preview opcional, aceitando somente vídeo (nunca áudio)."""
+        if preview_video is None:
+            return True, None, None
+        if not isinstance(preview_video, str):
+            return False, None, 'Formato de preview inválido'
+
+        preview_normalizado = preview_video.strip()
+        if not preview_normalizado:
+            return True, None, None
+
+        if len(preview_normalizado) > 10_000_000:
+            return False, None, 'Preview muito grande. Use até 10MB.'
+
+        if preview_normalizado.startswith('data:audio/'):
+            return False, None, 'Áudio não é aceito no modo de criação de livro'
+
+        if preview_normalizado.startswith('data:video/'):
+            if not (
+                preview_normalizado.startswith('data:video/mp4')
+                or preview_normalizado.startswith('data:video/quicktime')
+            ):
+                return False, None, 'Formato de preview inválido. Use MOV ou MP4.'
+            return True, preview_normalizado, None
+
+        if preview_normalizado.startswith('http://') or preview_normalizado.startswith('https://'):
+            return True, preview_normalizado, None
+
+        return False, None, 'Formato de preview inválido. Use MOV ou MP4.'
+
+    @staticmethod
     def _obter_tema_visual(historia: Historia) -> dict:
         """Retorna uma paleta simples para destacar a história na interface."""
         genero = historia.genero.casefold()
@@ -389,16 +420,19 @@ class HistoriaController:
             capa_final = capa if HistoriaController._limpar_texto(capa or '') else metadados.get('capa')
 
             capa_ok, capa_normalizada, capa_erro = HistoriaController._validar_capa(capa_final)
+            preview_ok, preview_normalizado, preview_erro = HistoriaController._validar_preview_video(preview_video)
             if not titulo_final:
                 return {'sucesso': False, 'erro': 'Título é obrigatório', 'codigo': 400}
             if not sinopse_final:
                 return {'sucesso': False, 'erro': 'Sinopse é obrigatória', 'codigo': 400}
             if not capa_ok:
                 return {'sucesso': False, 'erro': capa_erro or 'Capa inválida', 'codigo': 400}
+            if not preview_ok:
+                return {'sucesso': False, 'erro': preview_erro or 'Preview inválido', 'codigo': 400}
 
             historia = Historia(titulo_final, sinopse_final, genero_final, capa=capa_normalizada)
-            if preview_video and isinstance(preview_video, str) and preview_video.strip():
-                historia.preview_video = preview_video.strip()
+            if preview_normalizado:
+                historia.preview_video = preview_normalizado
 
             for indice, capitulo_data in enumerate(capitulos_extraidos, start=1):
                 capitulo = Capitulo(
@@ -635,6 +669,32 @@ class HistoriaController:
                 'sucesso': True,
                 'capitulo': HistoriaController.serializar_capitulo(capitulo, incluir_conteudo=True),
                 'mensagem': f'Capítulo "{titulo}" atualizado com sucesso!'
+            }
+        except Exception as e:
+            return {'sucesso': False, 'erro': str(e), 'codigo': 500}
+
+    @staticmethod
+    def excluir_capitulo(historia_id: str, capitulo_id: str) -> dict:
+        """Exclui um capítulo e reordena os demais."""
+        historia = historias_db.get(historia_id)
+        if not historia:
+            return {'sucesso': False, 'erro': 'História não encontrada', 'codigo': 404}
+
+        capitulo = HistoriaController._buscar_capitulo(historia, capitulo_id)
+        if not capitulo:
+            return {'sucesso': False, 'erro': 'Capítulo não encontrado', 'codigo': 404}
+
+        try:
+            historia.capitulos.remove(capitulo)
+            for indice, item in enumerate(historia.capitulos, start=1):
+                item.ordem = indice
+            if not historia.capitulos and historia.status == 'completa':
+                historia.status = 'em_escrita'
+            historia.data_atualizacao = datetime.now()
+            return {
+                'sucesso': True,
+                'capitulo_id': capitulo_id,
+                'mensagem': f'Capítulo "{capitulo.titulo}" excluído com sucesso!',
             }
         except Exception as e:
             return {'sucesso': False, 'erro': str(e), 'codigo': 500}

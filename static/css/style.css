@@ -528,12 +528,30 @@ textarea {
 }
 
 body[data-page="inicio"] #inicio-em-alta.story-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+    gap: 10px;
 }
 
 body[data-page="inicio"] .story-home-card .writer-book-cover .cover {
     aspect-ratio: 2 / 3;
+}
+
+body[data-page="inicio"] .story-home-card {
+    max-width: 168px;
+    justify-self: center;
+}
+
+body[data-page="inicio"] .story-home-card .writer-book-info {
+    padding: 8px 8px 9px;
+    gap: 2px;
+}
+
+body[data-page="inicio"] .story-home-card .writer-book-info strong {
+    font-size: 0.82rem;
+}
+
+body[data-page="inicio"] .story-home-card .writer-book-info span {
+    font-size: 0.72rem;
 }
 
 body[data-page="inicio"] #inicio-em-alta .story-body {
@@ -830,6 +848,11 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     background: transparent;
     padding: 0;
     text-align: left;
+    position: relative;
+}
+
+.writer-book-cover-wrap {
+    position: relative;
 }
 
 .writer-book-cover .cover {
@@ -861,30 +884,32 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     position: absolute;
     left: 8px;
     right: 8px;
-    top: 8px;
+    top: 50%;
     display: flex;
+    justify-content: center;
     flex-wrap: wrap;
     gap: 6px;
     opacity: 0;
-    transform: translateY(-4px);
+    transform: translateY(-50%);
     pointer-events: none;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    transition: opacity 0.2s ease, filter 0.2s ease;
+    filter: blur(1px);
 }
 
 .story-discovery-card:hover .story-hover-actions,
 .story-discovery-card:focus-within .story-hover-actions {
     opacity: 1;
-    transform: translateY(0);
+    filter: blur(0);
     pointer-events: auto;
 }
 
 .story-quick-btn {
     min-height: 30px;
     border-radius: 999px;
-    border: 1px solid rgba(255, 255, 255, 0.4);
-    background: rgba(20, 25, 34, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.38);
+    background: rgba(12, 16, 24, 0.82);
     color: #f4f7fb;
-    padding: 0 10px;
+    padding: 0 9px;
     font-size: 0.74rem;
     font-weight: 700;
 }
@@ -1057,7 +1082,7 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
 }
 
 .writer-screen-book {
-    max-width: 720px;
+    max-width: 980px;
 }
 
 .writer-screen-chapters {
@@ -1111,10 +1136,102 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
 
 .writer-cover-preview-image {
     width: 100%;
-    max-height: 260px;
-    object-fit: cover;
+    height: 100%;
+    max-height: none;
+    object-fit: contain;
     border-radius: 8px;
     border: 1px solid var(--line);
+    background: rgba(8, 10, 14, 0.42);
+}
+
+.writer-book-form {
+    display: grid;
+    grid-template-columns: minmax(220px, 290px) minmax(0, 1fr);
+    gap: 12px 16px;
+    align-items: start;
+}
+
+.writer-book-form .upload-area {
+    grid-column: 1;
+    grid-row: 1 / span 8;
+    min-height: 430px;
+    height: 100%;
+}
+
+.writer-book-form .upload-inner {
+    min-height: 100%;
+    align-content: center;
+    text-align: center;
+}
+
+.writer-book-form .field,
+.writer-book-form .writer-screen-actions {
+    grid-column: 2;
+}
+
+.writer-chapter-tabs {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.writer-chapter-tab {
+    border: 1px solid var(--line);
+    background: var(--surface-2);
+    color: var(--muted);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-size: 0.84rem;
+    font-weight: 700;
+}
+
+.writer-chapter-tab.is-active {
+    background: rgba(99, 135, 247, 0.18);
+    color: #f3f7ff;
+    border-color: rgba(99, 135, 247, 0.45);
+}
+
+.writer-chapter-screen {
+    display: none;
+    gap: 10px;
+}
+
+.writer-chapter-screen.is-active {
+    display: grid;
+}
+
+.writer-chapter-form {
+    border-top: 0;
+    padding-top: 0;
+}
+
+.chapter-format-toolbar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.chapter-format-btn {
+    min-width: 34px;
+    height: 34px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--surface-2);
+    color: var(--text);
+    font-size: 0.95rem;
+    font-weight: 800;
+    display: grid;
+    place-items: center;
+}
+
+.chapter-format-btn:hover {
+    border-color: rgba(99, 135, 247, 0.45);
+    background: rgba(99, 135, 247, 0.12);
+}
+
+.writer-chapter-item .inline-actions {
+    justify-content: flex-end;
 }
 
 .editor-area {
@@ -1761,7 +1878,11 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     font-family: "Iowan Old Style", "Palatino Linotype", Georgia, serif;
     font-size: var(--reader-font-size, 24px);
     line-height: 1.55;
-    overflow: auto;
+    overflow: hidden;
+}
+
+.reader-page-text {
+    margin: 0;
 }
 
 .reader-page h3 {
@@ -2120,7 +2241,7 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     }
 
     body[data-page="inicio"] #inicio-em-alta.story-grid {
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
     }
 }
 
@@ -2137,6 +2258,11 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
     .main-topbar {
         flex-direction: column;
         align-items: stretch;
+    }
+
+    body[data-page="inicio"] .story-grid,
+    body[data-page="inicio"] #inicio-em-alta.story-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     .topbar-actions {
@@ -2206,6 +2332,21 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
         grid-template-columns: 1fr;
     }
 
+    .writer-book-form {
+        grid-template-columns: 1fr;
+    }
+
+    .writer-book-form .upload-area,
+    .writer-book-form .field,
+    .writer-book-form .writer-screen-actions {
+        grid-column: 1;
+        grid-row: auto;
+    }
+
+    .writer-book-form .upload-area {
+        min-height: 320px;
+    }
+
     .writer-editor-section + .writer-editor-section {
         border-left: 0;
         border-top: 1px solid var(--line);
@@ -2259,6 +2400,11 @@ body[data-page="inicio"] #inicio-em-alta .story-body {
 
     .story-sentiment-group {
         grid-template-columns: 1fr;
+    }
+
+    .writer-chapter-tabs {
+        flex-direction: column;
+        align-items: stretch;
     }
 
     .reader-progress-actions {
